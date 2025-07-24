@@ -1,0 +1,38 @@
+services:
+  postgres:
+    image: postgres:15
+    restart: always
+    environment:
+      POSTGRES_DB: tms
+      POSTGRES_USER: tms_user
+      POSTGRES_PASSWORD: tms_password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+      - ./db_init:/docker-entrypoint-initdb.d
+    ports:
+      - "5432:5432"
+
+  server:
+    build: ./server
+    environment:
+      - GIT_TOKEN=${GIT_TOKEN}
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=tms_user
+      - DB_PASSWORD=tms_password
+      - DB_NAME=tms
+    depends_on:
+      - postgres
+    ports:
+      - "4000:5000"
+
+  client:
+    build: ./client
+    depends_on:
+      - server
+    ports:
+      - "8080:80"
+
+volumes:
+  postgres_data: 

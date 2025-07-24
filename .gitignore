@@ -1,0 +1,36 @@
+# Node
+node_modules/
+
+# Env
+.env
+.env.*
+
+# Docker
+*.env
+*.local
+
+# Logs
+logs/
+*.log
+
+# Build
+/dist/
+/build/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# VSCode
+.vscode/
+
+# Docker volumes
+postgres_data/
+db_init/
+uploads/
+
+# Repo data
+repo_data/
+
+# Other
+*.sqlite 
