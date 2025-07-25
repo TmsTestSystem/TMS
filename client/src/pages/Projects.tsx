@@ -154,51 +154,50 @@ const Projects: React.FC = () => {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {projects.map((project) => (
-            <div key={project.id} className="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow">
+            <div key={project.id} className="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow overflow-hidden max-w-full">
               <div className="p-6">
-                <div className="flex items-start justify-between mb-4">
-                  <h3 className="text-xl font-semibold text-gray-900 mb-2">
+                <div className="flex items-start justify-between mb-4 max-w-full">
+                  <h3 className="text-xl font-semibold text-gray-900 mb-2 break-words max-w-[70%]">
                     {project.name}
                   </h3>
-                  <div className="flex space-x-2">
+                  <div className="flex space-x-2 flex-shrink-0">
                     <button
                       onClick={() => openEditModal(project)}
-                      className="text-blue-600 hover:text-blue-800 text-sm"
+                      className="text-blue-600 hover:text-blue-800 text-sm px-2 py-1 rounded bg-blue-50"
+                      style={{minWidth: 32}}
                     >
                       ✏️
                     </button>
                     <button
                       onClick={() => handleDeleteProject(project.id)}
-                      className="text-red-600 hover:text-red-800 text-sm"
+                      className="text-red-600 hover:text-red-800 text-sm px-2 py-1 rounded bg-red-50"
+                      style={{minWidth: 32}}
                     >
                       🗑️
                     </button>
                   </div>
                 </div>
-                
                 {project.description && (
-                  <p className="text-gray-600 mb-4 line-clamp-3">
+                  <p className="text-gray-600 mb-4 break-words max-w-full overflow-hidden">
                     {project.description}
                   </p>
                 )}
-                
                 {project.gitRepoUrl && (
-                  <div className="text-sm text-gray-500 mb-4">
+                  <div className="text-sm text-gray-500 mb-4 break-all max-w-full overflow-hidden">
                     <a 
                       href={project.gitRepoUrl} 
                       target="_blank" 
                       rel="noopener noreferrer"
-                      className="text-blue-600 hover:underline"
+                      className="text-blue-600 hover:underline break-all max-w-full truncate inline-block"
+                      style={{wordBreak: 'break-all'}}
                     >
                       📁 Git репозиторий
                     </a>
                   </div>
                 )}
-                
                 <div className="text-sm text-gray-500 mb-4">
                   Создан: {new Date(project.createdAt || '').toLocaleDateString()}
                 </div>
-                
                 <button
                   onClick={() => navigate(`/projects/${project.id}`)}
                   className="w-full px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition-colors"

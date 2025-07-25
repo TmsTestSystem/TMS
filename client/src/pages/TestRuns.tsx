@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import CreateTestRunModal from '../components/CreateTestRunModal.tsx';
 import TestRunResults from '../components/TestRunResults.tsx';
 import { useNavigate } from 'react-router-dom';
+import { toast } from 'react-toastify';
 
 interface TestRun {
   id: number;
@@ -64,11 +65,11 @@ const TestRuns: React.FC = () => {
         setTestRuns(testRuns.filter(run => run.id !== id));
       } else {
         const error = await response.json();
-        alert(error.error || 'Ошибка удаления тестового прогона');
+        toast.error(error.error || 'Ошибка удаления тестового прогона');
       }
     } catch (error) {
       console.error('Ошибка удаления тестового прогона:', error);
-      alert('Ошибка удаления тестового прогона');
+      toast.error('Ошибка удаления тестового прогона');
     }
   };
 
@@ -85,11 +86,11 @@ const TestRuns: React.FC = () => {
         ));
       } else {
         const error = await response.json();
-        alert(error.error || 'Ошибка запуска тестового прогона');
+        toast.error(error.error || 'Ошибка запуска тестового прогона');
       }
     } catch (error) {
       console.error('Ошибка запуска тестового прогона:', error);
-      alert('Ошибка запуска тестового прогона');
+      toast.error('Ошибка запуска тестового прогона');
     }
   };
 
@@ -106,11 +107,11 @@ const TestRuns: React.FC = () => {
         ));
       } else {
         const error = await response.json();
-        alert(error.error || 'Ошибка завершения тестового прогона');
+        toast.error(error.error || 'Ошибка завершения тестового прогона');
       }
     } catch (error) {
       console.error('Ошибка завершения тестового прогона:', error);
-      alert('Ошибка завершения тестового прогона');
+      toast.error('Ошибка завершения тестового прогона');
     }
   };
 

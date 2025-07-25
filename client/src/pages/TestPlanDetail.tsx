@@ -3,10 +3,12 @@ import { useParams, useNavigate } from 'react-router-dom';
 import AddTestCasesToPlanModal from '../components/AddTestCasesToPlanModal.tsx';
 import TestCaseSidebar from '../components/TestCaseSidebar.tsx';
 import { ChevronRightIcon, ChevronDownIcon } from '@heroicons/react/24/outline';
+import { toast } from 'react-toastify';
+import ConfirmModal from '../components/ConfirmModal';
 
 interface TestPlan {
-  id: number;
-  project_id: number;
+  id: string;
+  project_id: string;
   name: string;
   description?: string;
   status: string;
@@ -17,11 +19,11 @@ interface TestPlan {
 }
 
 interface TestCase {
-  id: number;
+  id: string;
   title: string;
   status: string;
   priority: string;
-  section_id?: number;
+  section_id?: string;
 }
 
 const TestPlanDetail: React.FC = () => {
@@ -34,8 +36,9 @@ const TestPlanDetail: React.FC = () => {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [selectedTestCase, setSelectedTestCase] = useState<TestCase | null>(null);
   const [sections, setSections] = useState<any[]>([]);
-  const [expandedSections, setExpandedSections] = useState<Set<number>>(new Set());
-  const [selectedSectionId, setSelectedSectionId] = useState<number | null>(null);
+  const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set());
+  const [selectedSectionId, setSelectedSectionId] = useState<string | null>(null);
+  const [showConfirm, setShowConfirm] = useState(false);
 
   useEffect(() => {
     fetchTestPlan();
@@ -86,10 +89,10 @@ const TestPlanDetail: React.FC = () => {
     } catch {}
   };
 
-  const getChildSections = (parentId: number | null) => sections.filter(s => s.parent_id === parentId);
-  const getSectionTestCases = (sectionId: number | null) => testCases.filter(tc => tc.section_id === sectionId);
+  const getChildSections = (parentId: string | null) => sections.filter(s => s.parent_id === parentId);
+  const getSectionTestCases = (sectionId: string | null) => testCases.filter(tc => tc.section_id === sectionId);
 
-  const handleToggleSection = (sectionId: number) => {
+  const handleToggleSection = (sectionId: string) => {
     setExpandedSections(prev => {
       const next = new Set(prev);
       if (next.has(sectionId)) next.delete(sectionId); else next.add(sectionId);
@@ -155,7 +158,7 @@ const TestPlanDetail: React.FC = () => {
     </div>
   );
 
-  const handleRemoveTestCase = async (testCaseId: number) => {
+  const handleRemoveTestCase = async (testCaseId: string) => {
     if (!window.confirm('Удалить тест-кейс из плана?')) return;
     try {
       // Отвязываем тест-кейс от плана (обновляем test_plan_id на null)
@@ -166,26 +169,29 @@ const TestPlanDetail: React.FC = () => {
       });
       fetchTestCases();
     } catch (e) {
-      alert('Ошибка удаления тест-кейса из плана');
+      toast.error('Ошибка удаления тест-кейса из плана');
     }
   };
 
   const handleStartTestRun = async () => {
-    if (!window.confirm('Запустить прогон по этому тест-плану?')) return;
+    setShowConfirm(true);
+  };
+  const doStartTestRun = async () => {
+    setShowConfirm(false);
     try {
       const response = await fetch('/api/test-runs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ testPlanId: Number(id), name: `Прогон для плана \"${testPlan?.name}\"` })
+        body: JSON.stringify({ testPlanId: id, name: `Прогон для плана "${testPlan?.name}"` })
       });
       if (response.ok) {
         const testRun = await response.json();
-        navigate(`/test-runs`); // Можно сделать переход на страницу прогона
+        navigate(`/test-runs`);
       } else {
-        alert('Ошибка запуска прогона');
+        toast.error('Ошибка запуска прогона');
       }
     } catch (e) {
-      alert('Ошибка запуска прогона');
+      toast.error('Ошибка запуска прогона');
     }
   };
 
@@ -250,6 +256,15 @@ const TestPlanDetail: React.FC = () => {
           onEdit={() => {}}
         />
       )}
+      <ConfirmModal
+        isOpen={showConfirm}
+        title="Подтвердите действие"
+        message="Запустить прогон по этому тест-плану?"
+        onConfirm={doStartTestRun}
+        onCancel={() => setShowConfirm(false)}
+        confirmText="OK"
+        cancelText="Отмена"
+      />
     </div>
   );
 };

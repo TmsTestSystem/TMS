@@ -2,8 +2,8 @@ import React, { useRef, useState, useEffect } from 'react';
 import { XMarkIcon, PlayIcon, PauseIcon, StopIcon, PencilIcon, TagIcon, CheckCircleIcon, ExclamationTriangleIcon, DocumentTextIcon } from '@heroicons/react/24/outline';
 
 interface TestResult {
-  id: number;
-  test_case_id: number;
+  id: string;
+  test_case_id: string;
   test_case_title: string;
   test_case_description?: string;
   test_case_priority: string;

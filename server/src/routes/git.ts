@@ -203,17 +203,33 @@ function withGitToken(url: string): string {
 async function exportJsonProject(query: any, projectId: string, repoPath: string) {
   const fs = require('fs');
   const path = require('path');
+  const { v4: uuidv4 } = require('uuid');
   if (!fs.existsSync(path.join(repoPath, 'test_cases'))) fs.mkdirSync(path.join(repoPath, 'test_cases'), { recursive: true });
   if (!fs.existsSync(path.join(repoPath, 'test_plans'))) fs.mkdirSync(path.join(repoPath, 'test_plans'), { recursive: true });
   if (!fs.existsSync(path.join(repoPath, 'test_runs'))) fs.mkdirSync(path.join(repoPath, 'test_runs'), { recursive: true });
-  // Экспорт тест-кейсов
+
+  // 1. Собираем все id и содержимое удалённых тест-кейсов
+  const remoteCases: Record<string, any> = {};
+  const remoteCaseDir = path.join(repoPath, 'test_cases');
+  if (fs.existsSync(remoteCaseDir)) {
+    const remoteCaseFiles = fs.readdirSync(remoteCaseDir, { encoding: 'utf8' });
+    for (const file of remoteCaseFiles) {
+      const data = JSON.parse(fs.readFileSync(path.join(remoteCaseDir, file), 'utf8'));
+      remoteCases[data.id] = data;
+    }
+  }
+
+  // 2. Экспортируем локальные тест-кейсы
   const cases = await query('SELECT * FROM test_cases WHERE project_id = $1', [projectId]);
   for (const c of cases.rows) {
+    let caseData = { ...c };
+    // Если id (uuid) совпадает, всегда обновляем файл (перезаписываем кейс)
     fs.writeFileSync(
-      path.join(repoPath, 'test_cases', `case-${c.id}.json`),
-      JSON.stringify(c, null, 2)
+      path.join(repoPath, 'test_cases', `case-${caseData.id}.json`),
+      JSON.stringify(caseData, null, 2)
     );
   }
+  // Аналогично можно реализовать для test_plans и test_runs (по необходимости)
   // Экспорт тест-планов
   const plans = await query('SELECT * FROM test_plans WHERE project_id = $1', [projectId]);
   for (const p of plans.rows) {
@@ -228,6 +244,15 @@ async function exportJsonProject(query: any, projectId: string, repoPath: string
     fs.writeFileSync(
       path.join(repoPath, 'test_runs', `run-${r.id}.json`),
       JSON.stringify(r, null, 2)
+    );
+  }
+  // Экспорт разделов (test_case_sections)
+  if (!fs.existsSync(path.join(repoPath, 'test_case_sections'))) fs.mkdirSync(path.join(repoPath, 'test_case_sections'), { recursive: true });
+  const sections = await query('SELECT * FROM test_case_sections WHERE project_id = $1', [projectId]);
+  for (const s of sections.rows) {
+    fs.writeFileSync(
+      path.join(repoPath, 'test_case_sections', `section-${s.id}.json`),
+      JSON.stringify(s, null, 2)
     );
   }
 }
@@ -263,20 +288,46 @@ async function importJsonProject(query: any, projectId: string, repoPath: string
       }
     }
   }
-  // Импорт тест-кейсов
+  // --- Новый блок: импорт разделов с маппингом old_id -> new_id ---
+  const sectionDir = path.join(repoPath, 'test_case_sections');
+  const sectionIdMap: Record<string, string> = {};
+  if (fs.existsSync(sectionDir)) {
+    const sectionFiles = fs.readdirSync(sectionDir, { encoding: 'utf8' });
+    for (const file of sectionFiles) {
+      const data = JSON.parse(fs.readFileSync(path.join(sectionDir, file), 'utf8'));
+      const oldId = data.id;
+      // Проверяем, есть ли уже раздел с таким id
+      const res = await query('SELECT id FROM test_case_sections WHERE id = $1', [data.id]);
+      let newId = data.id;
+      if (res.rows.length === 0) {
+        // Вставляем новый раздел
+        await query(
+          `INSERT INTO test_case_sections (id, project_id, name, parent_id, created_at, updated_at)
+           VALUES ($1,$2,$3,$4,$5,$6)
+           ON CONFLICT (id) DO UPDATE SET
+             project_id=$2, name=$3, parent_id=$4, created_at=$5, updated_at=$6`,
+          [data.id, actualProjectId, data.name, data.parent_id, data.created_at, data.updated_at]
+        );
+      } else {
+        // Уже есть раздел с таким id, используем существующий id
+        newId = res.rows[0].id;
+      }
+      sectionIdMap[oldId] = newId;
+    }
+  }
+  // --- Импорт тест-кейсов с учётом маппинга section_id ---
   const caseDir = path.join(repoPath, 'test_cases');
   if (fs.existsSync(caseDir)) {
     const caseFiles = fs.readdirSync(caseDir, { encoding: 'utf8' });
     for (const file of caseFiles) {
       const data = JSON.parse(fs.readFileSync(path.join(caseDir, file), 'utf8'));
       data.project_id = actualProjectId;
-      // Проверяем section_id
+      // Проверяем section_id через маппинг
       let sectionId = data.section_id;
-      if (sectionId) {
-        const sectionRes = await query('SELECT id FROM test_case_sections WHERE id = $1 AND project_id = $2', [sectionId, actualProjectId]);
-        if (!sectionRes.rows.length) {
-          sectionId = null;
-        }
+      if (sectionId && sectionIdMap[sectionId]) {
+        sectionId = sectionIdMap[sectionId];
+      } else if (sectionId) {
+        sectionId = null;
       }
       await query(
         `INSERT INTO test_cases (id, project_id, test_plan_id, title, description, preconditions, steps, expected_result, priority, status, created_by, assigned_to, section_id, created_at, updated_at)
@@ -319,7 +370,6 @@ async function importJsonProject(query: any, projectId: string, repoPath: string
     }
   }
   // Импорт разделов (test_case_sections)
-  const sectionDir = path.join(repoPath, 'test_case_sections');
   if (fs.existsSync(sectionDir)) {
     const sectionFiles = fs.readdirSync(sectionDir, { encoding: 'utf8' });
     for (const file of sectionFiles) {
@@ -434,12 +484,26 @@ router.post('/push', async (req, res) => {
     await git.add('./*/*');
     await git.commit('feat: экспорт данных из БД в JSON');
     try {
+      // Перед push делаем pull --rebase для интеграции изменений других пользователей
+      await git.pull('origin', 'main', {'--rebase': null});
+    } catch (pullErr) {
+      const err = pullErr as Error;
+      res.status(409).json({ success: false, error: 'Конфликт при pull: ' + (err.message || err) });
+      return;
+    }
+    try {
       await git.push();
     } catch (e) {
       // Если ошибка про upstream, пробуем с --set-upstream
-      await git.push(['--set-upstream', 'origin', 'main']);
+      try {
+        await git.push(['--set-upstream', 'origin', 'main']);
+      } catch (pushErr) {
+        const err = pushErr as Error;
+        res.status(500).json({ success: false, error: 'Ошибка push: ' + (err.message || err) });
+        return;
+      }
     }
-    res.json({ success: true, message: 'Git push + экспорт завершён' });
+    res.json({ success: true, message: 'Git pull --rebase + push + экспорт завершён' });
   } catch (error) {
     res.status(500).json({ success: false, error: (error as Error).message });
   }

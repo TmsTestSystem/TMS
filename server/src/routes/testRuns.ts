@@ -109,7 +109,7 @@ router.post('/', async (req: Request, res: Response) => {
       `INSERT INTO test_runs (
         test_plan_id, name, description, status, started_by, created_at
       ) VALUES ($1, $2, $3, $4, $5, NOW()) RETURNING *`,
-      [testPlanId, name, description, 'planned', 1] // TODO: использовать реального пользователя
+      [testPlanId, name, description, 'planned', '00000000-0000-0000-0000-000000000001']
     );
     
     const testRun = result.rows[0];
@@ -248,7 +248,7 @@ router.put('/:id/results/:testCaseId', async (req: Request, res: Response) => {
       `UPDATE test_results 
        SET status = $1, notes = $2, duration = $3, executed_by = $4, executed_at = COALESCE($5, executed_at)
        WHERE test_run_id = $6 AND test_case_id = $7 RETURNING *`,
-      [status, notes, duration, 1, executedAt, id, testCaseId] // TODO: использовать реального пользователя
+      [status, notes, duration, '00000000-0000-0000-0000-000000000001', executedAt, id, testCaseId]
     );
     
     if (result.rows.length === 0) {

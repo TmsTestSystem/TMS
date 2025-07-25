@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import CreateTestCaseModal from '../components/CreateTestCaseModal.tsx';
 import EditTestCaseModal from '../components/EditTestCaseModal.tsx';
 import TestCaseSidebar from '../components/TestCaseSidebar.tsx';
+import { toast } from 'react-toastify';
 
 interface Project {
   id: number;
@@ -123,10 +124,10 @@ const ProjectDetail: React.FC = () => {
     try {
       const response = await fetch(`/api/git/pull?projectId=${id}`, { method: 'POST' });
       const data = await response.json();
-      alert(data.message || 'Импорт из Git завершён');
+      toast.success(data.message || 'Импорт из Git завершён');
       fetchTestCases();
     } catch (e) {
-      alert('Ошибка импорта из Git');
+      toast.error('Ошибка импорта из Git');
     } finally {
       setGitLoading(false);
     }
@@ -136,9 +137,9 @@ const ProjectDetail: React.FC = () => {
     try {
       const response = await fetch(`/api/git/push?projectId=${id}`, { method: 'POST' });
       const data = await response.json();
-      alert(data.message || 'Экспорт в Git завершён');
+      toast.success(data.message || 'Экспорт в Git завершён');
     } catch (e) {
-      alert('Ошибка экспорта в Git');
+      toast.error('Ошибка экспорта в Git');
     } finally {
       setGitLoading(false);
     }

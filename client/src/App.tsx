@@ -11,10 +11,13 @@ import Login from './pages/Login.tsx';
 import TestPlanDetail from './pages/TestPlanDetail.tsx';
 import TestRunDetail from './pages/TestRunDetail.tsx';
 import { AuthProvider } from './contexts/AuthContext.tsx';
+import { ToastContainer } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 
 function App() {
   return (
     <AuthProvider>
+      <ToastContainer aria-label="Уведомления" position="top-right" autoClose={4000} hideProgressBar={false} newestOnTop closeOnClick rtl={false} pauseOnFocusLoss draggable pauseOnHover />
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/" element={<MainLayout />}>

@@ -4,6 +4,7 @@ import CreateTestCaseModal from '../components/CreateTestCaseModal.tsx';
 import TestCaseTree from '../components/TestCaseTree.tsx';
 import TestCaseSidebar from '../components/TestCaseSidebar.tsx';
 import EditTestCaseModal from '../components/EditTestCaseModal.tsx';
+import { toast } from 'react-toastify';
 
 interface TestCase {
   id: number;
@@ -100,10 +101,10 @@ const TestCases: React.FC = () => {
         setRefreshTrigger(prev => prev + 1);
       } else {
         const error = await response.json();
-        alert(error.error || 'Ошибка создания тест-кейса');
+        toast.error(error.error || 'Ошибка создания тест-кейса');
       }
     } catch (error) {
-      alert('Ошибка создания тест-кейса');
+      toast.error('Ошибка создания тест-кейса');
     }
   };
 
@@ -129,8 +130,7 @@ const TestCases: React.FC = () => {
           expectedResult: updatedTestCase.expected_result || updatedTestCase.expectedResult,
           priority: updatedTestCase.priority,
           status: updatedTestCase.status,
-          sectionId: undefined,
-          section_id: typeof updatedTestCase.section_id === 'number' ? updatedTestCase.section_id : null
+          section_id: updatedTestCase.section_id !== undefined ? updatedTestCase.section_id : (updatedTestCase.sectionId !== undefined ? updatedTestCase.sectionId : null)
         }),
       });
       if (response.ok) {
@@ -141,10 +141,10 @@ const TestCases: React.FC = () => {
         setRefreshTrigger(prev => prev + 1);
       } else {
         const error = await response.json();
-        alert(error.error || 'Ошибка обновления тест-кейса');
+        toast.error(error.error || 'Ошибка обновления тест-кейса');
       }
     } catch (error) {
-      alert('Ошибка обновления тест-кейса');
+      toast.error('Ошибка обновления тест-кейса');
     }
   };
 
@@ -155,10 +155,10 @@ const TestCases: React.FC = () => {
     try {
       const response = await fetch(`/api/git/pull?projectId=${project.id}`, { method: 'POST' });
       const data = await response.json();
-      alert(data.message || 'Импорт из Git завершён');
+      toast.success(data.message || 'Импорт из Git завершён');
       setRefreshTrigger(prev => prev + 1);
     } catch (e) {
-      alert('Ошибка импорта из Git');
+      toast.error('Ошибка импорта из Git');
     } finally {
       setGitLoading(false);
     }
@@ -169,9 +169,9 @@ const TestCases: React.FC = () => {
     try {
       const response = await fetch(`/api/git/push?projectId=${project.id}`, { method: 'POST' });
       const data = await response.json();
-      alert(data.message || 'Экспорт в Git завершён');
+      toast.success(data.message || 'Экспорт в Git завершён');
     } catch (e) {
-      alert('Ошибка экспорта в Git');
+      toast.error('Ошибка экспорта в Git');
     } finally {
       setGitLoading(false);
     }
@@ -248,9 +248,9 @@ const TestCases: React.FC = () => {
   }
 
   return (
-    <div className="flex h-screen bg-gray-50">
+    <div className="flex flex-col md:flex-row h-full min-h-[80vh] bg-gray-50 max-w-full overflow-x-auto">
       {/* Левая панель с деревом тест-кейсов */}
-      <div className="w-1/3 bg-white border-r border-gray-200 flex flex-col">
+      <div className="bg-white border-r border-gray-200 flex flex-col w-auto min-w-[220px] max-w-full md:max-w-[600px] overflow-x-auto transition-all duration-200" style={{width: 'max-content'}}>
         {/* Заголовок */}
         <div className="p-4 border-b border-gray-200">
           <div className="flex items-center justify-between">
@@ -279,7 +279,8 @@ const TestCases: React.FC = () => {
         </div>
 
         {/* Дерево тест-кейсов */}
-        <div className="flex-1 overflow-y-auto p-4">
+        <div className="flex-1 overflow-y-auto p-2 sm:p-4">
+          {/* Группировка кейсов по разделам */}
           <TestCaseTree
             projectId={project.id}
             onTestCaseSelect={handleTestCaseSelect}
@@ -287,12 +288,13 @@ const TestCases: React.FC = () => {
             onTestCaseEdit={handleTestCaseEdit}
             selectedTestCaseId={selectedTestCase?.id}
             refreshTrigger={refreshTrigger}
+            groupBySection={true}
           />
         </div>
       </div>
 
       {/* Центральная панель с деталями тест-кейса */}
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col min-w-0 max-w-full md:max-w-[700px] lg:max-w-[900px] xl:max-w-[1200px] 2xl:max-w-[1500px] mx-auto transition-all duration-200">
         {selectedTestCase ? (
           <TestCaseSidebar
             isOpen={true}

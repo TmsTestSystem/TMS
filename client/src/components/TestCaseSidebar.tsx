@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { XMarkIcon, PencilIcon, ClockIcon, TagIcon, CheckCircleIcon, ExclamationTriangleIcon, InformationCircleIcon, DocumentTextIcon } from '@heroicons/react/24/outline';
 
 interface TestCase {
-  id: number;
+  id: string;
   title: string;
   description?: string;
   preconditions?: string;
@@ -82,11 +82,13 @@ const TestCaseSidebar: React.FC<TestCaseSidebarProps> = ({ isOpen, onClose, test
     }
   };
 
+  // Ограничение ширины: всегда максимум
+  const sidebarWidth = Math.min(window.innerWidth, 700);
   return (
     <div
       ref={sidebarRef}
       className="fixed top-0 right-0 h-full bg-white border-l border-gray-200 flex flex-col z-40 shadow-lg"
-      style={{ minWidth: 320, maxWidth: 700, width }}
+      style={{ minWidth: 320, maxWidth: 700, width: sidebarWidth }}
     >
       {/* Drag handle */}
       <div
@@ -99,7 +101,15 @@ const TestCaseSidebar: React.FC<TestCaseSidebarProps> = ({ isOpen, onClose, test
       <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white p-6 flex items-start justify-between">
         <div className="flex-1 pr-4">
           <div className="flex items-center gap-2 mb-2">
-            <h2 className="text-xl font-bold leading-tight mr-2">{currentTestCase.title}</h2>
+            <h2
+              className="text-xl font-bold leading-tight mr-2 break-words truncate max-w-[90vw] max-w-[600px]"
+              style={{wordBreak: 'break-word'}}
+              title={currentTestCase.title}
+            >
+              {currentTestCase.title && currentTestCase.title.length > 100
+                ? currentTestCase.title.slice(0, 100) + '…'
+                : currentTestCase.title}
+            </h2>
             {/* Кнопка редактирования убрана */}
           </div>
           <div className="flex items-center gap-4 text-sm text-blue-100">
@@ -160,8 +170,10 @@ const TestCaseSidebar: React.FC<TestCaseSidebarProps> = ({ isOpen, onClose, test
               <InformationCircleIcon className="w-5 h-5 text-blue-500" />
               <h3 className="text-lg font-semibold text-gray-800">Описание</h3>
             </div>
-            <div className="text-gray-700 whitespace-pre-line leading-relaxed">
-              {currentTestCase.description}
+            <div className="text-gray-700 break-words whitespace-pre-line leading-relaxed" title={currentTestCase.description}>
+              {currentTestCase.description && currentTestCase.description.length > 300
+                ? currentTestCase.description.slice(0, 300) + '…'
+                : currentTestCase.description}
             </div>
           </div>
         )}
@@ -173,8 +185,10 @@ const TestCaseSidebar: React.FC<TestCaseSidebarProps> = ({ isOpen, onClose, test
               <CheckCircleIcon className="w-5 h-5 text-green-500" />
               <h3 className="text-lg font-semibold text-gray-800">Предусловия</h3>
             </div>
-            <div className="text-gray-700 whitespace-pre-line leading-relaxed">
-              {currentTestCase.preconditions}
+            <div className="text-gray-700 break-words whitespace-pre-line leading-relaxed" title={currentTestCase.preconditions}>
+              {currentTestCase.preconditions && currentTestCase.preconditions.length > 200
+                ? currentTestCase.preconditions.slice(0, 200) + '…'
+                : currentTestCase.preconditions}
             </div>
           </div>
         )}
@@ -186,9 +200,13 @@ const TestCaseSidebar: React.FC<TestCaseSidebarProps> = ({ isOpen, onClose, test
               <DocumentTextIcon className="w-5 h-5 text-purple-500" />
               <h3 className="text-lg font-semibold text-gray-800">Шаги выполнения</h3>
             </div>
-            <div className="text-gray-700 whitespace-pre-line leading-relaxed">
-              {currentTestCase.steps}
-            </div>
+            <ol className="list-decimal list-inside text-gray-700 text-sm space-y-1">
+              {currentTestCase.steps && currentTestCase.steps.length > 300
+                ? <li className="break-words whitespace-pre-line max-w-full overflow-x-auto">{currentTestCase.steps.slice(0, 300) + '…'}</li>
+                : currentTestCase.steps?.split(/\n|\r|\d+\./).filter(s => s.trim()).map((step, idx) => (
+                  <li key={idx} className="break-words whitespace-pre-line max-w-full" style={{overflowX: /\S{30,}/.test(step) ? 'auto' : 'visible'}}>{step.trim()}</li>
+                ))}
+            </ol>
           </div>
         )}
 
@@ -199,8 +217,10 @@ const TestCaseSidebar: React.FC<TestCaseSidebarProps> = ({ isOpen, onClose, test
               <ExclamationTriangleIcon className="w-5 h-5 text-orange-500" />
               <h3 className="text-lg font-semibold text-gray-800">Ожидаемый результат</h3>
             </div>
-            <div className="text-gray-700 whitespace-pre-line leading-relaxed">
-              {currentTestCase.expectedResult}
+            <div className="text-gray-700 break-words whitespace-pre-line leading-relaxed text-sm" title={currentTestCase.expectedResult}>
+              {currentTestCase.expectedResult && currentTestCase.expectedResult.length > 200
+                ? currentTestCase.expectedResult.slice(0, 200) + '…'
+                : currentTestCase.expectedResult}
             </div>
           </div>
         )}
@@ -269,7 +289,7 @@ export const TestCaseSidebarView: React.FC<{
           <InformationCircleIcon className="w-5 h-5 text-blue-500" />
           <h3 className="text-base font-semibold text-gray-800">Описание</h3>
         </div>
-        <div className="text-gray-700 whitespace-pre-line leading-relaxed text-sm">
+        <div className="text-gray-700 break-words whitespace-pre-line leading-relaxed text-sm">
           {testCase.description}
         </div>
       </div>
@@ -281,7 +301,7 @@ export const TestCaseSidebarView: React.FC<{
           <CheckCircleIcon className="w-5 h-5 text-green-500" />
           <h3 className="text-base font-semibold text-gray-800">Предусловия</h3>
         </div>
-        <div className="text-gray-700 whitespace-pre-line leading-relaxed text-sm">
+        <div className="text-gray-700 break-words whitespace-pre-line leading-relaxed text-sm">
           {testCase.preconditions}
         </div>
       </div>
@@ -307,7 +327,7 @@ export const TestCaseSidebarView: React.FC<{
           <CheckCircleIcon className="w-5 h-5 text-blue-500" />
           <h3 className="text-base font-semibold text-gray-800">Ожидаемый результат</h3>
         </div>
-        <div className="text-gray-700 whitespace-pre-line leading-relaxed text-sm">
+        <div className="text-gray-700 break-words whitespace-pre-line leading-relaxed text-sm">
           {testCase.expectedResult}
         </div>
       </div>

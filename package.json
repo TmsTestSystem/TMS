@@ -16,10 +16,18 @@
     "docker:down": "docker-compose down",
     "install:all": "npm install && cd server && npm install && cd ../client && npm install"
   },
-  "keywords": ["test-management", "testing", "tms", "spr"],
+  "keywords": [
+    "test-management",
+    "testing",
+    "tms",
+    "spr"
+  ],
   "author": "SPR Team",
   "license": "MIT",
   "devDependencies": {
     "concurrently": "^8.2.2"
+  },
+  "dependencies": {
+    "react-toastify": "^11.0.5"
   }
-} 
+}

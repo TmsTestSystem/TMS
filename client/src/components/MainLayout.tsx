@@ -56,7 +56,7 @@ const Layout: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 flex flex-col">
       {/* Мобильный hamburger */}
       <button
         className="fixed top-4 left-4 z-50 md:hidden bg-white rounded-full p-2 shadow"
@@ -68,7 +68,7 @@ const Layout: React.FC = () => {
 
       {/* Sidebar */}
       {/* Desktop */}
-      <div className="hidden md:fixed md:inset-y-0 md:left-0 md:z-50 md:w-64 md:block sidebar">
+      <div className="hidden md:fixed md:inset-y-0 md:left-0 md:z-50 md:w-64 md:block sidebar bg-white border-r border-gray-200 h-full overflow-y-auto">
         <div className="flex flex-col h-full">
           {/* Logo */}
           <div className="flex items-center justify-center h-16 px-4 border-b border-gray-200">
@@ -401,8 +401,8 @@ const Layout: React.FC = () => {
         </>
       )}
       {/* Main content */}
-      <div className="md:pl-64 pl-0 transition-all">
-        <main className="p-2 sm:p-4 md:p-6">
+      <div className="flex-1 md:pl-64 pl-0 transition-all min-w-0">
+        <main className="p-2 sm:p-4 md:p-6 max-w-full w-full mx-auto min-h-[calc(100vh-64px)] overflow-x-auto">
           <Outlet />
         </main>
       </div>

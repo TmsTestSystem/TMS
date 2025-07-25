@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { FolderIcon, DocumentTextIcon, ChevronRightIcon, ChevronDownIcon, PlusIcon, PencilIcon, TrashIcon } from '@heroicons/react/24/outline';
 import CreateTestCaseModal from './CreateTestCaseModal.tsx';
+import { toast } from 'react-toastify';
 
 interface TestCaseSection {
-  id: number;
-  project_id: number;
-  parent_id: number | null;
+  id: string;
+  project_id: string;
+  parent_id: string | null;
   name: string;
   order_index: number;
   created_at: string;
@@ -13,10 +14,10 @@ interface TestCaseSection {
 }
 
 interface TestCase {
-  id: number;
-  project_id: number;
-  test_plan_id: number | null;
-  section_id: number | null;
+  id: string;
+  project_id: string;
+  test_plan_id: string | null;
+  section_id: string | null;
   title: string;
   description: string;
   preconditions: string;
@@ -33,7 +34,7 @@ interface TestCaseTreeProps {
   onTestCaseSelect: (testCase: TestCase) => void;
   onTestCaseCreate: () => void;
   onTestCaseEdit: (testCase: TestCase) => void;
-  selectedTestCaseId?: number;
+  selectedTestCaseId?: string;
   refreshTrigger?: number;
 }
 
@@ -47,19 +48,22 @@ const TestCaseTree: React.FC<TestCaseTreeProps> = ({
 }) => {
   const [sections, setSections] = useState<TestCaseSection[]>([]);
   const [testCases, setTestCases] = useState<TestCase[]>([]);
-  const [expandedSections, setExpandedSections] = useState<Set<number>>(new Set());
+  const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
-  const [editingSection, setEditingSection] = useState<number | null>(null);
+  const [editingSection, setEditingSection] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
   const [showCreateSection, setShowCreateSection] = useState(false);
   const [newSectionName, setNewSectionName] = useState('');
-  const [parentSectionId, setParentSectionId] = useState<number | null>(null);
-  const [editingParentId, setEditingParentId] = useState<number | null>(null);
+  const [parentSectionId, setParentSectionId] = useState<string | null>(null);
+  const [editingParentId, setEditingParentId] = useState<string | null>(null);
   
   // Drag & Drop состояния
   const [draggedTestCase, setDraggedTestCase] = useState<TestCase | null>(null);
-  const [dragOverSection, setDragOverSection] = useState<number | null>(null);
+  const [dragOverSection, setDragOverSection] = useState<string | null>(null);
   const [dragOverUnassigned, setDragOverUnassigned] = useState(false);
+
+  // Состояние для мультивыделения кейсов
+  const [selectedTestCases, setSelectedTestCases] = useState<Set<string>>(new Set());
 
   // Модалки подтверждения удаления
   const [showDeleteSectionModal, setShowDeleteSectionModal] = useState(false);
@@ -71,11 +75,28 @@ const TestCaseTree: React.FC<TestCaseTreeProps> = ({
   const [showEditSectionModal, setShowEditSectionModal] = useState(false);
   const [sectionToEdit, setSectionToEdit] = useState<TestCaseSection | null>(null);
   const [editSectionName, setEditSectionName] = useState('');
-  const [editSectionParentId, setEditSectionParentId] = useState<number | null>(null);
+  const [editSectionParentId, setEditSectionParentId] = useState<string | null>(null);
 
   // Модалка создания тест-кейса
   const [showCreateCaseModal, setShowCreateCaseModal] = useState(false);
-  const [createCaseSectionId, setCreateCaseSectionId] = useState<number | null>(null);
+  const [createCaseSectionId, setCreateCaseSectionId] = useState<string | null>(null);
+
+  // Состояние для модалки подтверждения удаления пачки кейсов
+  const [showDeleteBatchModal, setShowDeleteBatchModal] = useState(false);
+  // Состояние для модалки подтверждения удаления раздела с кейсами
+  const [deleteSectionWithCases, setDeleteSectionWithCases] = useState<{section: TestCaseSection, cases: TestCase[]}|null>(null);
+
+  // Кнопка удаления пачки кейсов
+  const renderBatchDeleteButton = () => (
+    selectedTestCases.size > 0 && (
+      <button
+        onClick={() => setShowDeleteBatchModal(true)}
+        className="ml-2 px-3 py-1 bg-red-500 text-white rounded hover:bg-red-600 text-sm"
+      >
+        Удалить выбранные
+      </button>
+    )
+  );
 
   // Загрузка данных
   useEffect(() => {
@@ -131,7 +152,7 @@ const TestCaseTree: React.FC<TestCaseTreeProps> = ({
   };
 
   // Обновление раздела
-  const updateSection = async (sectionId: number) => {
+  const updateSection = async (sectionId: string) => {
     if (!editingName.trim()) return;
     
     try {
@@ -153,15 +174,28 @@ const TestCaseTree: React.FC<TestCaseTreeProps> = ({
   };
 
   // Удаление раздела
-  const deleteSection = async (sectionId: number) => {
+  const deleteSection = async (sectionId: string, deleteCases: boolean = false) => {
     try {
+      if (deleteCases) {
+        // Удалить все кейсы в разделе (и вложенных)
+        const collectCases = (secId: string): TestCase[] => {
+          const directCases = testCases.filter(tc => tc.section_id === secId);
+          const childSections = getChildSections(secId);
+          return [
+            ...directCases,
+            ...childSections.flatMap(s => collectCases(s.id))
+          ];
+        };
+        const casesToDelete = collectCases(sectionId);
+        await Promise.all(casesToDelete.map(tc => deleteTestCase(tc.id)));
+      }
       const response = await fetch(`/api/test-case-sections/${sectionId}`, {
         method: 'DELETE'
       });
-
       if (response.ok) {
         setShowDeleteSectionModal(false);
         setSectionToDelete(null);
+        setDeleteSectionWithCases(null);
         loadData();
       }
     } catch (error) {
@@ -170,7 +204,7 @@ const TestCaseTree: React.FC<TestCaseTreeProps> = ({
   };
 
   // Удаление тест-кейса
-  const deleteTestCase = async (testCaseId: number) => {
+  const deleteTestCase = async (testCaseId: string) => {
     try {
       const response = await fetch(`/api/test-cases/${testCaseId}`, {
         method: 'DELETE'
@@ -188,8 +222,17 @@ const TestCaseTree: React.FC<TestCaseTreeProps> = ({
 
   // Подготовка удаления раздела
   const prepareDeleteSection = (section: TestCaseSection) => {
-    setSectionToDelete(section);
-    setShowDeleteSectionModal(true);
+    // Найти все кейсы в этом разделе (и вложенных)
+    const collectCases = (secId: string): TestCase[] => {
+      const directCases = testCases.filter(tc => tc.section_id === secId);
+      const childSections = getChildSections(secId);
+      return [
+        ...directCases,
+        ...childSections.flatMap(s => collectCases(s.id))
+      ];
+    };
+    const casesInSection = collectCases(section.id);
+    setDeleteSectionWithCases({section, cases: casesInSection});
   };
 
   // Подготовка удаления тест-кейса
@@ -199,7 +242,7 @@ const TestCaseTree: React.FC<TestCaseTreeProps> = ({
   };
 
   // Переключение раскрытия раздела
-  const toggleSection = (sectionId: number) => {
+  const toggleSection = (sectionId: string) => {
     const newExpanded = new Set(expandedSections);
     if (newExpanded.has(sectionId)) {
       newExpanded.delete(sectionId);
@@ -217,17 +260,17 @@ const TestCaseTree: React.FC<TestCaseTreeProps> = ({
   };
 
   // Получение дочерних разделов
-  const getChildSections = (parentId: number | null) => {
+  const getChildSections = (parentId: string | null) => {
     return sections.filter(s => s.parent_id === parentId);
   };
 
   // Получение тест-кейсов раздела
-  const getSectionTestCases = (sectionId: number | null) => {
+  const getSectionTestCases = (sectionId: string | null) => {
     return testCases.filter(tc => tc.section_id === sectionId);
   };
 
   // Перемещение тест-кейса в раздел
-  const moveTestCaseToSection = async (testCaseId: number, sectionId: number | null) => {
+  const moveTestCaseToSection = async (testCaseId: string, sectionId: string | null) => {
     const testCase = testCases.find(tc => tc.id === testCaseId);
     if (!testCase) return;
     const updatedTestCase = {
@@ -260,9 +303,14 @@ const TestCaseTree: React.FC<TestCaseTreeProps> = ({
 
   // Drag handlers
   const handleDragStart = (e: React.DragEvent, testCase: TestCase) => {
+    // Если выделено несколько — тащим их пачкой, иначе только один
+    if (selectedTestCases.size > 1 && selectedTestCases.has(testCase.id)) {
+      e.dataTransfer.setData('application/json', JSON.stringify(Array.from(selectedTestCases)));
+    } else {
+      e.dataTransfer.setData('application/json', JSON.stringify([testCase.id]));
+    }
     setDraggedTestCase(testCase);
     e.dataTransfer.effectAllowed = 'move';
-    e.dataTransfer.setData('text/plain', testCase.id.toString());
   };
 
   const handleDragEnd = () => {
@@ -271,7 +319,7 @@ const TestCaseTree: React.FC<TestCaseTreeProps> = ({
     setDragOverUnassigned(false);
   };
 
-  const handleDragOver = (e: React.DragEvent, sectionId: number | null = null) => {
+  const handleDragOver = (e: React.DragEvent, sectionId: string | null = null) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
     if (sectionId !== null) {
@@ -288,20 +336,31 @@ const TestCaseTree: React.FC<TestCaseTreeProps> = ({
     setDragOverUnassigned(false);
   };
 
-  const handleDrop = (e: React.DragEvent, targetSectionId: number | null = null) => {
+  const handleDrop = (e: React.DragEvent, targetSectionId: string | null = null) => {
     e.preventDefault();
-    if (!draggedTestCase) return;
-
-    // Не перемещаем в тот же раздел
-    if (draggedTestCase.section_id === targetSectionId) {
+    let ids: string[] = [];
+    try {
+      ids = JSON.parse(e.dataTransfer.getData('application/json'));
+    } catch {
+      if (draggedTestCase) ids = [draggedTestCase.id];
+    }
+    if (!ids.length) return;
+    // Не переносим если все уже в этом разделе
+    const allInTarget = ids.every(id => {
+      const tc = testCases.find(tc => tc.id === id);
+      return tc && tc.section_id === targetSectionId;
+    });
+    if (allInTarget) {
       setDragOverSection(null);
       setDragOverUnassigned(false);
       return;
     }
-
-    moveTestCaseToSection(draggedTestCase.id, targetSectionId);
-    setDragOverSection(null);
-    setDragOverUnassigned(false);
+    // Переносим пачкой
+    Promise.all(ids.map(id => moveTestCaseToSection(id, targetSectionId))).then(() => {
+      setSelectedTestCases(new Set());
+      setDragOverSection(null);
+      setDragOverUnassigned(false);
+    });
   };
 
   // Открытие модалки редактирования раздела
@@ -388,7 +447,7 @@ const TestCaseTree: React.FC<TestCaseTreeProps> = ({
               />
               <select
                 value={editingParentId || ''}
-                onChange={e => setEditingParentId(e.target.value ? Number(e.target.value) : null)}
+                onChange={e => setEditingParentId(e.target.value ? String(e.target.value) : null)}
                 className="ml-2 px-2 py-1 border rounded text-sm"
               >
                 <option value="">Без родительского раздела</option>
@@ -447,6 +506,13 @@ const TestCaseTree: React.FC<TestCaseTreeProps> = ({
                   selectedTestCaseId === testCase.id ? 'bg-blue-100' : ''
                 } ${draggedTestCase?.id === testCase.id ? 'opacity-50' : ''}`}
               >
+                <input
+                  type="checkbox"
+                  checked={selectedTestCases.has(testCase.id)}
+                  onChange={e => handleSelectTestCase(testCase.id, e.target.checked)}
+                  className="mr-2 accent-blue-500"
+                  onClick={e => e.stopPropagation()}
+                />
                 <DocumentTextIcon className="w-4 h-4 text-gray-500" />
                 <span className="text-sm flex-1">{testCase.title}</span>
                 <span className={`px-2 py-0.5 text-xs rounded ${
@@ -490,7 +556,7 @@ const TestCaseTree: React.FC<TestCaseTreeProps> = ({
   const unassignedTestCases = getSectionTestCases(null);
 
   // Открытие модалки создания тест-кейса
-  const handleOpenCreateCase = (sectionId: number | null) => {
+  const handleOpenCreateCase = (sectionId: string | null) => {
     setCreateCaseSectionId(sectionId);
     setShowCreateCaseModal(true);
   };
@@ -514,11 +580,28 @@ const TestCaseTree: React.FC<TestCaseTreeProps> = ({
         loadData();
       } else {
         const error = await response.json();
-        alert(error.error || 'Ошибка создания тест-кейса');
+        toast.error(error.error || 'Ошибка создания тест-кейса');
       }
     } catch (error) {
-      alert('Ошибка создания тест-кейса');
+      toast.error('Ошибка создания тест-кейса');
     }
+  };
+
+  // Обработчик выбора кейса (чекбокс)
+  const handleSelectTestCase = (testCaseId: string, checked: boolean) => {
+    setSelectedTestCases(prev => {
+      const next = new Set(prev);
+      if (checked) next.add(testCaseId);
+      else next.delete(testCaseId);
+      return next;
+    });
+  };
+
+  // Удаление пачки кейсов
+  const handleDeleteSelectedTestCases = async () => {
+    await Promise.all(Array.from(selectedTestCases).map(id => deleteTestCase(id)));
+    setSelectedTestCases(new Set());
+    setShowDeleteBatchModal(false);
   };
 
   if (loading) {
@@ -526,11 +609,11 @@ const TestCaseTree: React.FC<TestCaseTreeProps> = ({
   }
 
   return (
-    <div className="space-y-4">
-      {/* Заголовок с кнопками создания */}
+    <div className="w-full max-w-full">
+      {/* Заголовок с кнопками создания и удаления пачки */}
       <div className="flex items-center justify-between gap-2">
         <h3 className="text-lg font-semibold">Структура тест-кейсов</h3>
-        <div className="flex gap-2">
+        <div className="flex gap-2 items-center">
           <button
             onClick={() => handleOpenCreateCase(null)}
             className="flex items-center gap-1 px-3 py-1 bg-green-500 text-white rounded hover:bg-green-600 text-sm"
@@ -545,6 +628,7 @@ const TestCaseTree: React.FC<TestCaseTreeProps> = ({
             <PlusIcon className="w-4 h-4" />
             Создать раздел
           </button>
+          {renderBatchDeleteButton()}
         </div>
       </div>
 
@@ -568,7 +652,7 @@ const TestCaseTree: React.FC<TestCaseTreeProps> = ({
                 <label className="block text-sm font-medium mb-1">Родительский раздел</label>
                 <select
                   value={parentSectionId || ''}
-                  onChange={(e) => setParentSectionId(e.target.value ? Number(e.target.value) : null)}
+                  onChange={(e) => setParentSectionId(e.target.value ? String(e.target.value) : null)}
                   className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="">Без родительского раздела</option>
@@ -620,7 +704,7 @@ const TestCaseTree: React.FC<TestCaseTreeProps> = ({
                 <label className="block text-sm font-medium mb-1">Родительский раздел</label>
                 <select
                   value={editSectionParentId || ''}
-                  onChange={(e) => setEditSectionParentId(e.target.value ? Number(e.target.value) : null)}
+                  onChange={(e) => setEditSectionParentId(e.target.value ? String(e.target.value) : null)}
                   className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="">Без родительского раздела</option>
@@ -655,17 +739,9 @@ const TestCaseTree: React.FC<TestCaseTreeProps> = ({
 
       {/* Тест-кейсы без раздела */}
       {unassignedTestCases.length > 0 && (
-        <div className="mt-4">
-          <div 
-            className={`flex items-center gap-2 px-2 py-1 text-sm font-medium text-gray-600 rounded ${
-              dragOverUnassigned ? 'bg-blue-50 border-2 border-blue-300 border-dashed' : ''
-            }`}
-            onDragOver={(e) => handleDragOver(e, null)}
-            onDragLeave={handleDragLeave}
-            onDrop={(e) => handleDrop(e, null)}
-          >
-            <DocumentTextIcon className="w-4 h-4" />
-            Без раздела ({unassignedTestCases.length})
+        <div className="mt-2">
+          <div className="flex items-center gap-2 px-2 py-1 text-gray-500 text-xs uppercase tracking-wide">
+            <FolderIcon className="w-3 h-3" /> Без раздела
           </div>
           {unassignedTestCases.map(testCase => (
             <div
@@ -678,6 +754,13 @@ const TestCaseTree: React.FC<TestCaseTreeProps> = ({
                 selectedTestCaseId === testCase.id ? 'bg-blue-100' : ''
               } ${draggedTestCase?.id === testCase.id ? 'opacity-50' : ''}`}
             >
+              <input
+                type="checkbox"
+                checked={selectedTestCases.has(testCase.id)}
+                onChange={e => handleSelectTestCase(testCase.id, e.target.checked)}
+                className="mr-2 accent-blue-500"
+                onClick={e => e.stopPropagation()}
+              />
               <DocumentTextIcon className="w-4 h-4 text-gray-500" />
               <span className="text-sm flex-1">{testCase.title}</span>
               <span className={`px-2 py-0.5 text-xs rounded ${
@@ -720,8 +803,8 @@ const TestCaseTree: React.FC<TestCaseTreeProps> = ({
           isOpen={showCreateCaseModal}
           onClose={() => setShowCreateCaseModal(false)}
           projectId={projectId}
-          sectionId={createCaseSectionId}
           onSave={handleCaseCreated}
+          sectionId={createCaseSectionId || undefined}
         />
       )}
 
@@ -785,6 +868,74 @@ const TestCaseTree: React.FC<TestCaseTreeProps> = ({
                 className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600"
               >
                 Удалить
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Модалка подтверждения удаления пачки кейсов */}
+      {showDeleteBatchModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-96">
+            <h3 className="text-lg font-semibold mb-4 text-red-600">Удалить выбранные тест-кейсы</h3>
+            <p className="text-gray-700 mb-6">
+              Вы уверены, что хотите удалить <b>{selectedTestCases.size}</b> выбранных тест-кейсов?
+              <br />Это действие нельзя отменить.
+            </p>
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={() => setShowDeleteBatchModal(false)}
+                className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded"
+              >
+                Отмена
+              </button>
+              <button
+                onClick={handleDeleteSelectedTestCases}
+                className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600"
+              >
+                Удалить
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Модалка подтверждения удаления раздела с кейсами */}
+      {deleteSectionWithCases && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-96">
+            <h3 className="text-lg font-semibold mb-4 text-red-600">Удалить раздел</h3>
+            <p className="text-gray-700 mb-6">
+              Вы уверены, что хотите удалить раздел <strong>"{deleteSectionWithCases.section.name}"</strong>?
+              <br />
+              {deleteSectionWithCases.cases.length > 0 ? (
+                <span className="text-sm text-gray-500">
+                  В этом разделе и вложенных разделах найдено <b>{deleteSectionWithCases.cases.length}</b> тест-кейсов.<br />
+                  <b>Удалить вместе с разделом?</b>
+                </span>
+              ) : (
+                <span className="text-sm text-gray-500">В разделе нет тест-кейсов.</span>
+              )}
+            </p>
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={() => setDeleteSectionWithCases(null)}
+                className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded"
+              >
+                Отмена
+              </button>
+              <button
+                onClick={() => deleteSection(deleteSectionWithCases.section.id, true)}
+                className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600"
+              >
+                Удалить раздел и кейсы
+              </button>
+              <button
+                onClick={() => deleteSection(deleteSectionWithCases.section.id, false)}
+                className="px-4 py-2 bg-yellow-500 text-white rounded hover:bg-yellow-600"
+              >
+                Только раздел
               </button>
             </div>
           </div>

@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
+import { toast } from 'react-toastify';
 
 interface TestPlan {
-  id: number;
+  id: string;
   name: string;
   description?: string;
   status: string;
@@ -86,7 +87,7 @@ const CreateTestRunModal: React.FC<CreateTestRunModalProps> = ({
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          testPlanId: parseInt(formData.testPlanId),
+          testPlanId: formData.testPlanId,
           name,
           description: formData.description
         }),
@@ -103,11 +104,11 @@ const CreateTestRunModal: React.FC<CreateTestRunModalProps> = ({
         onClose();
       } else {
         const error = await response.json();
-        alert(error.error || 'Ошибка создания тестового прогона');
+        toast.error(error.error || 'Ошибка создания тестового прогона');
       }
     } catch (error) {
       console.error('Ошибка создания тестового прогона:', error);
-      alert('Ошибка создания тестового прогона');
+      toast.error('Ошибка создания тестового прогона');
     }
   };
 

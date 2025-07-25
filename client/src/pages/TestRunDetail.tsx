@@ -2,28 +2,30 @@ import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { ChevronRightIcon, ChevronDownIcon, PlayIcon, PauseIcon, StopIcon, PencilIcon, XMarkIcon, CheckCircleIcon, DocumentTextIcon } from '@heroicons/react/24/outline';
 import TestRunCaseSidebar from '../components/TestRunCaseSidebar.tsx';
+import { toast, ToastContainer } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 
 interface TestRun {
-  id: number;
+  id: string;
   name: string;
   description?: string;
   status: string;
-  test_plan_id: number;
+  test_plan_id: string;
   test_plan_name: string;
-  project_id: number;
+  project_id: string;
   project_name: string;
 }
 
 interface Section {
-  id: number;
-  parent_id: number | null;
+  id: string;
+  parent_id: string | null;
   name: string;
   order_index: number;
 }
 
 interface TestResult {
-  id: number;
-  test_case_id: number;
+  id: string;
+  test_case_id: string;
   test_case_title: string;
   test_case_description?: string;
   test_case_priority: string;
@@ -32,7 +34,7 @@ interface TestResult {
   duration?: number;
   executed_by_name?: string;
   executed_at?: string;
-  section_id?: number;
+  section_id?: string;
   steps?: string;
   expected_result?: string;
   preconditions?: string;
@@ -44,17 +46,17 @@ const TestRunDetail: React.FC = () => {
   const [sections, setSections] = useState<Section[]>([]);
   const [results, setResults] = useState<TestResult[]>([]);
   const [loading, setLoading] = useState(true);
-  const [expandedSections, setExpandedSections] = useState<Set<number>>(new Set());
-  const [activeTimers, setActiveTimers] = useState<{ [key: number]: { running: boolean; seconds: number; paused: boolean } }>({});
+  const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set());
+  const [activeTimers, setActiveTimers] = useState<{ [key: string]: { running: boolean; seconds: number; paused: boolean } }>({});
   const [modalCase, setModalCase] = useState<TestResult | null>(null);
   const [modalStatus, setModalStatus] = useState('passed');
   const [modalComment, setModalComment] = useState('');
   const [modalTime, setModalTime] = useState('');
-  const [sidebarCaseId, setSidebarCaseId] = useState<number | null>(null);
+  const [sidebarCaseId, setSidebarCaseId] = useState<string | null>(null);
 
   useEffect(() => {
     if (id) {
-      fetchData(Number(id));
+      fetchData(id);
     }
   }, [id]);
 
@@ -70,13 +72,13 @@ const TestRunDetail: React.FC = () => {
         const next = { ...prev };
         let changed = false;
         Object.keys(next).forEach(id => {
-          if (next[+id].running && !next[+id].paused) {
-            next[+id].seconds += 1;
+          if (next[id].running && !next[id].paused) {
+            next[id].seconds += 1;
             changed = true;
           }
           // Если статус не in_progress, сбрасываем таймер
-          if (!results.find(r => r.test_case_id === +id && r.status === 'in_progress')) {
-            next[+id] = { running: false, seconds: 0, paused: false };
+          if (!results.find(r => r.test_case_id === id && r.status === 'in_progress')) {
+            next[id] = { running: false, seconds: 0, paused: false };
             changed = true;
           }
         });
@@ -96,7 +98,7 @@ const TestRunDetail: React.FC = () => {
     return `${m}:${s.toString().padStart(2, '0')}`;
   };
 
-  const fetchData = async (testRunId: number) => {
+  const fetchData = async (testRunId: string) => {
     setLoading(true);
     try {
       // Получаем инфо о прогоне
@@ -127,11 +129,11 @@ const TestRunDetail: React.FC = () => {
   };
 
   // Получить подразделы
-  const getChildSections = (parentId: number | null) =>
+  const getChildSections = (parentId: string | null) =>
     sections.filter(s => s.parent_id === parentId);
 
   // Получить кейсы раздела (только те, что есть в results)
-  const getSectionResults = (sectionId: number | null) => results.filter(r => r.section_id === sectionId);
+  const getSectionResults = (sectionId: string | null) => results.filter(r => r.section_id === sectionId);
 
   // Рекурсивный рендер раздела
   const renderSection = (section: Section, level: number = 0) => {
@@ -187,7 +189,7 @@ const TestRunDetail: React.FC = () => {
   };
 
   // Обновление статуса кейса
-  const updateCaseStatus = async (testCaseId: number, status: string, notes?: string, durationStr?: string) => {
+  const updateCaseStatus = async (testCaseId: string, status: string, notes?: string, durationStr?: string) => {
     const duration = durationStr ? parseInt(durationStr.split(':')[0]) * 60 + parseInt(durationStr.split(':')[1]) : undefined;
     console.log('PUT /api/test-runs/', testRun?.id, '/results/', testCaseId, { status, notes, duration });
     try {
@@ -359,70 +361,227 @@ const TestRunDetail: React.FC = () => {
     return el;
   });
 
+  // Экспорт статистики в CSV
+  const handleExportCSV = () => {
+    if (!results.length) {
+      toast.error('Нет данных для экспорта!');
+      return;
+    }
+    const header = [
+      'ID', 'Название', 'Статус', 'Время (сек)', 'Исполнитель', 'Комментарий', 'Приоритет', 'Раздел', 'Шаги', 'Ожидаемый результат', 'Предусловия'
+    ];
+    const rows = results.map(r => [
+      r.test_case_id,
+      '"' + (r.test_case_title?.replace(/"/g, '""') || '') + '"',
+      r.status,
+      r.duration ?? '',
+      r.executed_by_name ?? '',
+      '"' + (r.notes?.replace(/"/g, '""') || '') + '"',
+      r.test_case_priority ?? '',
+      r.section_id ?? '',
+      '"' + (r.steps?.replace(/"/g, '""') || '') + '"',
+      '"' + (r.expected_result?.replace(/"/g, '""') || '') + '"',
+      '"' + (r.preconditions?.replace(/"/g, '""') || '') + '"',
+    ]);
+    const csv = [header, ...rows].map(row => row.join(',')).join('\r\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `test_run_${testRun?.id || 'results'}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast.success('CSV-отчёт успешно сформирован!');
+  };
+
+  // Экспорт статистики в HTML с графиками
+  const handleExportHTML = () => {
+    if (!results.length) {
+      toast.error('Нет данных для экспорта!');
+      return;
+    }
+    // Группировка по статусам
+    const statusCounts = results.reduce((acc, r) => {
+      acc[r.status] = (acc[r.status] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
+    const statuses = Object.keys(statusCounts);
+    const total = results.length;
+    // Цвета для статусов
+    const statusColors: Record<string, string> = {
+      passed: '#22c55e',
+      failed: '#ef4444',
+      blocked: '#facc15',
+      in_progress: '#3b82f6',
+      draft: '#a3a3a3',
+    };
+    // SVG Pie Chart
+    let startAngle = 0;
+    const pieArcs = statuses.map((status, i) => {
+      const value = statusCounts[status];
+      const angle = (value / total) * 360;
+      const largeArc = angle > 180 ? 1 : 0;
+      const endAngle = startAngle + angle;
+      const x1 = 100 + 80 * Math.cos((Math.PI * startAngle) / 180);
+      const y1 = 100 + 80 * Math.sin((Math.PI * startAngle) / 180);
+      const x2 = 100 + 80 * Math.cos((Math.PI * endAngle) / 180);
+      const y2 = 100 + 80 * Math.sin((Math.PI * endAngle) / 180);
+      const d = `M100,100 L${x1},${y1} A80,80 0 ${largeArc} 1 ${x2},${y2} Z`;
+      const arc = `<path d='${d}' fill='${statusColors[status] || '#ccc'}'></path>`;
+      startAngle = endAngle;
+      return arc;
+    }).join('');
+    // SVG Bar Chart
+    const maxCount = Math.max(...Object.values(statusCounts));
+    const barChart = statuses.map((status, i) => {
+      const value = statusCounts[status];
+      const barHeight = (value / maxCount) * 120;
+      return `<rect x='${20 + i * 60}' y='${150 - barHeight}' width='40' height='${barHeight}' fill='${statusColors[status] || '#ccc'}'></rect>
+        <text x='${40 + i * 60}' y='${160}' text-anchor='middle' font-size='14'>${status}</text>
+        <text x='${40 + i * 60}' y='${150 - barHeight - 5}' text-anchor='middle' font-size='14'>${value}</text>`;
+    }).join('');
+    // Таблица результатов
+    const tableRows = results.map(r => `
+      <tr>
+        <td>${r.test_case_title || ''}</td>
+        <td>${r.status}</td>
+        <td>${r.duration ?? ''}</td>
+        <td>${r.executed_by_name || ''}</td>
+        <td>${r.notes || ''}</td>
+      </tr>`).join('');
+    const html = `<!DOCTYPE html>
+<html lang='ru'>
+<head>
+  <meta charset='UTF-8'>
+  <title>Отчёт по тестовому прогону</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 32px; }
+    h1 { font-size: 2em; }
+    .charts { display: flex; gap: 40px; margin-bottom: 32px; }
+    .chart-block { text-align: center; }
+    table { border-collapse: collapse; width: 100%; margin-top: 32px; }
+    th, td { border: 1px solid #ddd; padding: 8px; }
+    th { background: #f3f4f6; }
+  </style>
+</head>
+<body>
+  <h1>Отчёт по тестовому прогону: ${testRun?.test_plan_name || ''}</h1>
+  <div>Дата: ${new Date().toLocaleString()}</div>
+  <div class='charts'>
+    <div class='chart-block'>
+      <h2>Круговая диаграмма</h2>
+      <svg width='200' height='200' viewBox='0 0 200 200'>${pieArcs}</svg>
+    </div>
+    <div class='chart-block'>
+      <h2>Гистограмма</h2>
+      <svg width='${statuses.length * 60 + 40}' height='180' viewBox='0 0 ${statuses.length * 60 + 40} 180'>${barChart}</svg>
+    </div>
+  </div>
+  <table>
+    <thead>
+      <tr><th>Название</th><th>Статус</th><th>Время (сек)</th><th>Исполнитель</th><th>Комментарий</th></tr>
+    </thead>
+    <tbody>${tableRows}</tbody>
+  </table>
+</body>
+</html>`;
+    const blob = new Blob([html], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `test_run_${testRun?.id || 'results'}.html`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast.success('HTML-отчёт успешно сформирован!');
+  };
+
   if (loading) return <div className="p-8 text-center">Загрузка...</div>;
   if (!testRun) return <div className="p-8 text-center text-red-500">Прогон не найден</div>;
 
   return (
-    <div className="p-8 space-y-6">
-      <h1 className="text-2xl font-bold">Тестовый прогон: {testRun?.test_plan_name}</h1>
-      <div className="text-gray-600 mb-4">{testRun?.description}</div>
-      {testRun?.status === 'completed' && total > 0 && (
-        <div className="mb-8 flex justify-center">
-          <div className="bg-white rounded-2xl shadow-xl px-8 py-6 flex flex-col md:flex-row md:items-center gap-8 w-full max-w-2xl border border-gray-100">
-            <div className="flex flex-col items-center">
-              <div className="mb-2 text-lg font-bold text-gray-800">Результаты прогона</div>
-              <svg width="120" height="120" viewBox="0 0 100 100" className="transition-all duration-700">
-                {arcs}
-                <circle cx="50" cy="50" r="28" fill="#fff" />
-                <text x="50" y="55" textAnchor="middle" fontSize="22" fill="#222" fontWeight="bold">{percent(passed)}%</text>
-              </svg>
-              <div className="flex flex-col gap-2 mt-4 w-full">
-                <span className="flex items-center gap-2">
-                  <span className="w-4 h-4 rounded-full" style={{background:'#22c55e'}}></span>
-                  <span className="font-semibold text-gray-700">Выполнено</span>
-                  <span className="ml-auto flex items-center gap-1 bg-green-100 text-green-700 px-2 py-0.5 rounded-full text-xs font-bold"><CheckCircleIcon className="w-4 h-4" />{passed} ({percent(passed)}%)</span>
-                </span>
-                <span className="flex items-center gap-2">
-                  <span className="w-4 h-4 rounded-full" style={{background:'#ef4444'}}></span>
-                  <span className="font-semibold text-gray-700">Ошибка</span>
-                  <span className="ml-auto flex items-center gap-1 bg-red-100 text-red-700 px-2 py-0.5 rounded-full text-xs font-bold"><XMarkIcon className="w-4 h-4" />{failed} ({percent(failed)}%)</span>
-                </span>
-                <span className="flex items-center gap-2">
-                  <span className="w-4 h-4 rounded-full" style={{background:'#facc15'}}></span>
-                  <span className="font-semibold text-gray-700">Заблокировано</span>
-                  <span className="ml-auto flex items-center gap-1 bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full text-xs font-bold"><PauseIcon className="w-4 h-4" />{blocked} ({percent(blocked)}%)</span>
-                </span>
+    <>
+      <div className="p-8 space-y-6">
+        <h1 className="text-2xl font-bold">Тестовый прогон: {testRun?.test_plan_name}</h1>
+        <div className="text-gray-600 mb-4">{testRun?.description}</div>
+        {testRun?.status === 'completed' && total > 0 && (
+          <div className="mb-8 flex justify-center">
+            <div className="bg-white rounded-2xl shadow-xl px-8 py-6 flex flex-col md:flex-row md:items-center gap-8 w-full max-w-2xl border border-gray-100">
+              <div className="flex flex-col items-center">
+                <div className="mb-2 text-lg font-bold text-gray-800 flex items-center gap-4">
+                  Результаты прогона
+                  <button
+                    className="ml-2 px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm transition"
+                    onClick={handleExportCSV}
+                    title="Скачать статистику (CSV)"
+                  >
+                    Скачать статистику
+                  </button>
+                  <button
+                    className="ml-2 px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 text-sm transition"
+                    onClick={handleExportHTML}
+                    title="Скачать отчёт (HTML)"
+                  >
+                    Скачать отчёт (HTML)
+                  </button>
+                </div>
+                <svg width="120" height="120" viewBox="0 0 100 100" className="transition-all duration-700">
+                  {arcs}
+                  <circle cx="50" cy="50" r="28" fill="#fff" />
+                  <text x="50" y="55" textAnchor="middle" fontSize="22" fill="#222" fontWeight="bold">{percent(passed)}%</text>
+                </svg>
+                <div className="flex flex-col gap-2 mt-4 w-full">
+                  <span className="flex items-center gap-2">
+                    <span className="w-4 h-4 rounded-full" style={{background:'#22c55e'}}></span>
+                    <span className="font-semibold text-gray-700">Выполнено</span>
+                    <span className="ml-auto flex items-center gap-1 bg-green-100 text-green-700 px-2 py-0.5 rounded-full text-xs font-bold"><CheckCircleIcon className="w-4 h-4" />{passed} ({percent(passed)}%)</span>
+                  </span>
+                  <span className="flex items-center gap-2">
+                    <span className="w-4 h-4 rounded-full" style={{background:'#ef4444'}}></span>
+                    <span className="font-semibold text-gray-700">Ошибка</span>
+                    <span className="ml-auto flex items-center gap-1 bg-red-100 text-red-700 px-2 py-0.5 rounded-full text-xs font-bold"><XMarkIcon className="w-4 h-4" />{failed} ({percent(failed)}%)</span>
+                  </span>
+                  <span className="flex items-center gap-2">
+                    <span className="w-4 h-4 rounded-full" style={{background:'#facc15'}}></span>
+                    <span className="font-semibold text-gray-700">Заблокировано</span>
+                    <span className="ml-auto flex items-center gap-1 bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full text-xs font-bold"><PauseIcon className="w-4 h-4" />{blocked} ({percent(blocked)}%)</span>
+                  </span>
+                </div>
+              </div>
+              <div className="flex flex-col items-center justify-center">
+                <div className="text-gray-500 text-sm mb-1">Общее время выполнения</div>
+                <div className="text-green-700 font-bold text-2xl tracking-tight">{formatTime(totalDuration)}</div>
               </div>
             </div>
-            <div className="flex flex-col items-center justify-center">
-              <div className="text-gray-500 text-sm mb-1">Общее время выполнения</div>
-              <div className="text-green-700 font-bold text-2xl tracking-tight">{formatTime(totalDuration)}</div>
-            </div>
-          </div>
-        </div>
-      )}
-      <div>
-        {sections.filter(s => s.parent_id === null).map(section => renderSection(section))}
-        {getSectionResults(null).length > 0 && (
-          <div className="mt-2">
-            <div className="font-semibold text-gray-700" style={{ fontSize: 14 }}>Без раздела</div>
-            {getSectionResults(null).map(result => renderTestCase(result, 1))}
           </div>
         )}
+        <div>
+          {sections.filter(s => s.parent_id === null).map(section => renderSection(section))}
+          {getSectionResults(null).length > 0 && (
+            <div className="mt-2">
+              <div className="font-semibold text-gray-700" style={{ fontSize: 14 }}>Без раздела</div>
+              {getSectionResults(null).map(result => renderTestCase(result, 1))}
+            </div>
+          )}
+        </div>
+        {renderModal()}
+        <TestRunCaseSidebar
+          isOpen={sidebarCaseId !== null}
+          onClose={() => setSidebarCaseId(null)}
+          testResult={sidebarCaseId !== null ? results.find(r => r.test_case_id === sidebarCaseId) || null : null}
+          timerData={sidebarCaseId !== null ? activeTimers[sidebarCaseId] : undefined}
+          onPause={handlePause}
+          onStart={handleStart}
+          onStop={handleStop}
+          onEdit={handleEditResult}
+          formatTime={formatTime}
+        />
       </div>
-      {renderModal()}
-      <TestRunCaseSidebar
-        isOpen={sidebarCaseId !== null}
-        onClose={() => setSidebarCaseId(null)}
-        testResult={sidebarCaseId !== null ? results.find(r => r.test_case_id === sidebarCaseId) || null : null}
-        timerData={sidebarCaseId !== null ? activeTimers[sidebarCaseId] : undefined}
-        onPause={handlePause}
-        onStart={handleStart}
-        onStop={handleStop}
-        onEdit={handleEditResult}
-        formatTime={formatTime}
-      />
-    </div>
+      <ToastContainer aria-label="Уведомления" position="top-right" autoClose={4000} hideProgressBar={false} newestOnTop closeOnClick rtl={false} pauseOnFocusLoss draggable pauseOnHover />
+    </>
   );
 };
 

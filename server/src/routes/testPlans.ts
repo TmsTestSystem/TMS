@@ -86,7 +86,7 @@ router.post('/', async (req: Request, res: Response) => {
       `INSERT INTO test_plans (
         project_id, name, description, status, created_by, created_at, updated_at
       ) VALUES ($1, $2, $3, $4, $5, NOW(), NOW()) RETURNING *`,
-      [projectId, name, description, status || 'draft', 1] // TODO: использовать реального пользователя
+      [projectId, name, description, status || 'draft', '00000000-0000-0000-0000-000000000001']
     );
     
     return res.status(201).json(result.rows[0]);
