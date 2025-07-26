@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { toast } from 'react-toastify';
+import { handleApiError } from '../utils/errorHandler.ts';
 
 interface Project {
   id: string;
@@ -99,8 +100,8 @@ const CreateTestPlanModal: React.FC<CreateTestPlanModalProps> = ({
         }
         onClose();
       } else {
-        const error = await response.json();
-        toast.error(error.error || (editMode ? 'Ошибка обновления тест-плана' : 'Ошибка создания тест-плана'));
+        const errorMessage = await handleApiError(response);
+        toast.error(errorMessage);
       }
     } catch (error) {
       console.error(editMode ? 'Ошибка обновления тест-плана:' : 'Ошибка создания тест-плана:', error);

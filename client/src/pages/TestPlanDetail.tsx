@@ -4,7 +4,7 @@ import AddTestCasesToPlanModal from '../components/AddTestCasesToPlanModal.tsx';
 import TestCaseSidebar from '../components/TestCaseSidebar.tsx';
 import { ChevronRightIcon, ChevronDownIcon } from '@heroicons/react/24/outline';
 import { toast } from 'react-toastify';
-import ConfirmModal from '../components/ConfirmModal';
+import ConfirmModal from '../components/ConfirmModal.tsx';
 
 interface TestPlan {
   id: string;
@@ -188,10 +188,15 @@ const TestPlanDetail: React.FC = () => {
         const testRun = await response.json();
         navigate(`/test-runs`);
       } else {
-        toast.error('Ошибка запуска прогона');
+        const data = await response.json();
+        toast.error(data.error || 'Ошибка запуска прогона');
       }
     } catch (e) {
-      toast.error('Ошибка запуска прогона');
+      if (e instanceof Error) {
+        toast.error(e.message || 'Ошибка запуска прогона');
+      } else {
+        toast.error('Ошибка запуска прогона');
+      }
     }
   };
 

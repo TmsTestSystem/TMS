@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import CreateTestPlanModal from '../components/CreateTestPlanModal.tsx';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
+import { handleApiError } from '../utils/errorHandler.ts';
 
 interface TestPlan {
   id: string;
@@ -60,8 +61,8 @@ const TestPlans: React.FC = () => {
       if (response.ok) {
         setTestPlans(testPlans.filter(plan => plan.id !== id));
       } else {
-        const error = await response.json();
-        toast.error(error.error || 'Ошибка удаления тест-плана');
+        const errorMessage = await handleApiError(response);
+        toast.error(errorMessage);
       }
     } catch (error) {
       console.error('Ошибка удаления тест-плана:', error);

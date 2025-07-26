@@ -5,12 +5,13 @@ import TestCaseTree from '../components/TestCaseTree.tsx';
 import TestCaseSidebar from '../components/TestCaseSidebar.tsx';
 import EditTestCaseModal from '../components/EditTestCaseModal.tsx';
 import { toast } from 'react-toastify';
+import { handleApiError } from '../utils/errorHandler.ts';
 
 interface TestCase {
-  id: number;
-  project_id: number;
-  test_plan_id: number | null;
-  section_id: number | null;
+  id: string;
+  project_id: string;
+  test_plan_id: string | null;
+  section_id: string | null;
   title: string;
   description: string;
   preconditions: string;
@@ -23,7 +24,7 @@ interface TestCase {
 }
 
 interface Project {
-  id: number;
+  id: string;
   name: string;
   description: string;
   git_repository: string;
@@ -100,8 +101,8 @@ const TestCases: React.FC = () => {
         // Принудительно обновляем дерево
         setRefreshTrigger(prev => prev + 1);
       } else {
-        const error = await response.json();
-        toast.error(error.error || 'Ошибка создания тест-кейса');
+        const errorMessage = await handleApiError(response);
+        toast.error(errorMessage);
       }
     } catch (error) {
       toast.error('Ошибка создания тест-кейса');
@@ -140,8 +141,8 @@ const TestCases: React.FC = () => {
         // Принудительно обновляем дерево
         setRefreshTrigger(prev => prev + 1);
       } else {
-        const error = await response.json();
-        toast.error(error.error || 'Ошибка обновления тест-кейса');
+        const errorMessage = await handleApiError(response);
+        toast.error(errorMessage);
       }
     } catch (error) {
       toast.error('Ошибка обновления тест-кейса');
@@ -154,9 +155,14 @@ const TestCases: React.FC = () => {
     setGitLoading(true);
     try {
       const response = await fetch(`/api/git/pull?projectId=${project.id}`, { method: 'POST' });
-      const data = await response.json();
-      toast.success(data.message || 'Импорт из Git завершён');
-      setRefreshTrigger(prev => prev + 1);
+      if (response.ok) {
+        const data = await response.json();
+        toast.success(data.message || 'Импорт из Git завершён');
+        setRefreshTrigger(prev => prev + 1);
+      } else {
+        const errorMessage = await handleApiError(response);
+        toast.error(errorMessage);
+      }
     } catch (e) {
       toast.error('Ошибка импорта из Git');
     } finally {
@@ -168,8 +174,13 @@ const TestCases: React.FC = () => {
     setGitLoading(true);
     try {
       const response = await fetch(`/api/git/push?projectId=${project.id}`, { method: 'POST' });
-      const data = await response.json();
-      toast.success(data.message || 'Экспорт в Git завершён');
+      if (response.ok) {
+        const data = await response.json();
+        toast.success(data.message || 'Экспорт в Git завершён');
+      } else {
+        const errorMessage = await handleApiError(response);
+        toast.error(errorMessage);
+      }
     } catch (e) {
       toast.error('Ошибка экспорта в Git');
     } finally {
