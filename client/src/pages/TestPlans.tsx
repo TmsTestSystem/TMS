@@ -3,6 +3,7 @@ import CreateTestPlanModal from '../components/CreateTestPlanModal.tsx';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { handleApiError } from '../utils/errorHandler.ts';
+import { FileText } from 'lucide-react';
 
 interface TestPlan {
   id: string;
@@ -109,10 +110,13 @@ const TestPlans: React.FC = () => {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="container mx-auto px-4 py-8">
+      <div className="flex items-center mb-8 gap-2">
+        <FileText className="w-6 h-6 text-blue-500" />
+        <h1 className="text-3xl font-bold text-gray-900">Тест-планы</h1>
+      </div>
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Тест-планы</h1>
           <p className="text-gray-600">Планирование тестирования</p>
         </div>
         <button
@@ -140,85 +144,51 @@ const TestPlans: React.FC = () => {
           </button>
         </div>
       ) : (
-        <div className="grid gap-6">
-          {testPlans.map((testPlan) => (
-            <div key={testPlan.id} className="card p-6 cursor-pointer hover:bg-blue-50 transition" onClick={() => navigate(`/test-plans/${testPlan.id}`)}>
-              <div className="flex justify-between items-start">
-                <div className="flex-1">
-                  <div className="flex items-center space-x-3 mb-2">
-                    <h3 className="text-lg font-semibold text-gray-900">
-                      {testPlan.name}
-                    </h3>
-                    <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(testPlan.status)}`}>
-                      {getStatusText(testPlan.status)}
-                    </span>
-                  </div>
-                  
-                  {testPlan.description && (
-                    <p className="text-gray-600 mb-3">{testPlan.description}</p>
-                  )}
-                  
-                  <div className="flex items-center space-x-6 text-sm text-gray-500">
-                    <div className="flex items-center space-x-1">
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                      </svg>
-                      <span>{testPlan.project_name}</span>
-                    </div>
-                    
-                    {testPlan.test_cases_count !== undefined && (
-                      <div className="flex items-center space-x-1">
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                        </svg>
-                        <span>{testPlan.test_cases_count} тест-кейсов</span>
-                      </div>
-                    )}
-                    
-                    <div className="flex items-center space-x-1">
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                      </svg>
-                      <span>{testPlan.created_by_name}</span>
-                    </div>
-                    
-                    <div className="flex items-center space-x-1">
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                      </svg>
-                      <span>{new Date(testPlan.created_at).toLocaleDateString('ru-RU')}</span>
-                    </div>
-                  </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {testPlans.map((plan) => (
+            <div
+              key={plan.id}
+              className="bg-white rounded-lg shadow p-6 hover:shadow-lg transition-shadow cursor-pointer"
+              onClick={() => navigate(`/test-plans/${plan.id}`)}
+            >
+              <div className="flex items-center gap-2 mb-2">
+                <FileText className="w-5 h-5 text-blue-400" />
+                <h3 className="text-lg font-semibold text-gray-900">{plan.name}</h3>
+              </div>
+              
+              {plan.description && (
+                <p className="text-gray-600 mb-3">{plan.description}</p>
+              )}
+              
+              <div className="flex items-center space-x-6 text-sm text-gray-500">
+                <div className="flex items-center space-x-1">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                  </svg>
+                  <span>{plan.project_name}</span>
                 </div>
                 
-                <div className="flex items-center space-x-2">
-                  <button
-                    onClick={e => { e.stopPropagation(); navigate(`/test-plans/${testPlan.id}`); }}
-                    className="btn-icon"
-                    title="Открыть"
-                  >
+                {plan.test_cases_count !== undefined && (
+                  <div className="flex items-center space-x-1">
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
                     </svg>
-                  </button>
-                  <button
-                    onClick={e => { e.stopPropagation(); setEditPlan(testPlan); }}
-                    className="btn-icon"
-                    title="Редактировать"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536M9 11l6 6M3 21h6l11-11a2.828 2.828 0 00-4-4L5 17v4z" />
-                    </svg>
-                  </button>
-                  <button
-                    onClick={e => { e.stopPropagation(); handleDeleteTestPlan(testPlan.id); }}
-                    className="btn-icon"
-                    title="Удалить"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
-                  </button>
+                    <span>{plan.test_cases_count} тест-кейсов</span>
+                  </div>
+                )}
+                
+                <div className="flex items-center space-x-1">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                  </svg>
+                  <span>{plan.created_by_name}</span>
+                </div>
+                
+                <div className="flex items-center space-x-1">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                  <span>{new Date(plan.created_at).toLocaleDateString('ru-RU')}</span>
                 </div>
               </div>
             </div>
