@@ -26,6 +26,15 @@ interface TestCase {
   section_id?: string;
 }
 
+interface Section {
+  id: string;
+  name: string;
+  parent_id: string | null;
+  project_id: string;
+  order_index: number;
+  created_at: string;
+}
+
 const TestPlanDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -35,7 +44,7 @@ const TestPlanDetail: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [selectedTestCase, setSelectedTestCase] = useState<TestCase | null>(null);
-  const [sections, setSections] = useState<any[]>([]);
+  const [sections, setSections] = useState<Section[]>([]);
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set());
   const [selectedSectionId, setSelectedSectionId] = useState<string | null>(null);
   const [showConfirm, setShowConfirm] = useState(false);
@@ -92,6 +101,21 @@ const TestPlanDetail: React.FC = () => {
   const getChildSections = (parentId: string | null) => sections.filter(s => s.parent_id === parentId);
   const getSectionTestCases = (sectionId: string | null) => testCases.filter(tc => tc.section_id === sectionId);
 
+  // Функция для проверки, содержит ли раздел (или его подразделы) тест-кейсы из плана
+  const hasTestCasesInSection = (sectionId: string): boolean => {
+    const directCases = getSectionTestCases(sectionId);
+    if (directCases.length > 0) return true;
+    
+    const childSections = getChildSections(sectionId);
+    return childSections.some(child => hasTestCasesInSection(child.id));
+  };
+
+  // Функция для получения только тех разделов, которые содержат тест-кейсы из плана
+  const getSectionsWithTestCases = (parentId: string | null) => {
+    const allSections = sections.filter(s => s.parent_id === parentId);
+    return allSections.filter(section => hasTestCasesInSection(section.id));
+  };
+
   const handleToggleSection = (sectionId: string) => {
     setExpandedSections(prev => {
       const next = new Set(prev);
@@ -100,7 +124,7 @@ const TestPlanDetail: React.FC = () => {
     });
   };
 
-  const renderSection = (section: any, level = 0) => {
+  const renderSection = (section: Section, level = 0) => {
     const childSections = getChildSections(section.id);
     const sectionCases = getSectionTestCases(section.id);
     const isExpanded = expandedSections.has(section.id);
@@ -129,7 +153,7 @@ const TestPlanDetail: React.FC = () => {
         {isExpanded && (
           <div>
             {sectionCases.map(tc => renderCase(tc, level + 1))}
-            {childSections.map(child => renderSection(child, level + 1))}
+            {getSectionsWithTestCases(section.id).map(child => renderSection(child, level + 1))}
           </div>
         )}
       </div>
@@ -231,7 +255,7 @@ const TestPlanDetail: React.FC = () => {
           <div className="text-gray-500">Нет тест-кейсов в этом плане</div>
         ) : (
           <div>
-            {sections.filter(s => !s.parent_id).map(section => renderSection(section))}
+            {getSectionsWithTestCases(null).map(section => renderSection(section))}
             {/* Кейсы без раздела */}
             {getSectionTestCases(null).map(tc => renderCase(tc, 0))}
           </div>

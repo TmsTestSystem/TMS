@@ -1,32 +1,33 @@
 import React, { useEffect, useState } from 'react';
+import { ChevronRightIcon, ChevronDownIcon } from '@heroicons/react/24/outline';
 
 interface TestCase {
-  id: number;
+  id: string;
   title: string;
   status: string;
   priority: string;
-  section_id: number | null;
+  section_id: string | null;
 }
 
 interface Section {
-  id: number;
+  id: string;
   name: string;
-  parent_id: number | null;
+  parent_id: string | null;
 }
 
 interface AddTestCasesToPlanModalProps {
   isOpen: boolean;
   onClose: () => void;
-  projectId: number;
-  testPlanId: number;
+  projectId: string;
+  testPlanId: string;
   onAdded: () => void;
 }
 
 const AddTestCasesToPlanModal: React.FC<AddTestCasesToPlanModalProps> = ({ isOpen, onClose, projectId, testPlanId, onAdded }) => {
   const [sections, setSections] = useState<Section[]>([]);
   const [testCases, setTestCases] = useState<TestCase[]>([]);
-  const [selectedCases, setSelectedCases] = useState<Set<number>>(new Set());
-  const [expandedSections, setExpandedSections] = useState<Set<number>>(new Set());
+  const [selectedCases, setSelectedCases] = useState<Set<string>>(new Set());
+  const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -58,10 +59,10 @@ const AddTestCasesToPlanModal: React.FC<AddTestCasesToPlanModalProps> = ({ isOpe
     }
   };
 
-  const getChildSections = (parentId: number | null) => sections.filter(s => s.parent_id === parentId);
-  const getSectionTestCases = (sectionId: number | null) => testCases.filter(tc => tc.section_id === sectionId);
+  const getChildSections = (parentId: string | null) => sections.filter(s => s.parent_id === parentId);
+  const getSectionTestCases = (sectionId: string | null) => testCases.filter(tc => tc.section_id === sectionId);
 
-  const handleToggleSection = (sectionId: number) => {
+  const handleToggleSection = (sectionId: string) => {
     setExpandedSections(prev => {
       const next = new Set(prev);
       if (next.has(sectionId)) next.delete(sectionId); else next.add(sectionId);
@@ -69,7 +70,7 @@ const AddTestCasesToPlanModal: React.FC<AddTestCasesToPlanModalProps> = ({ isOpe
     });
   };
 
-  const handleToggleCase = (caseId: number) => {
+  const handleToggleCase = (caseId: string) => {
     setSelectedCases(prev => {
       const next = new Set(prev);
       if (next.has(caseId)) next.delete(caseId); else next.add(caseId);
@@ -77,9 +78,9 @@ const AddTestCasesToPlanModal: React.FC<AddTestCasesToPlanModalProps> = ({ isOpe
     });
   };
 
-  const handleToggleSectionCheckbox = (sectionId: number) => {
+  const handleToggleSectionCheckbox = (sectionId: string) => {
     // Выделить/снять все кейсы в разделе (и вложенных)
-    const collectCases = (sid: number): number[] => {
+    const collectCases = (sid: string): string[] => {
       let ids = getSectionTestCases(sid).map(tc => tc.id);
       for (const child of getChildSections(sid)) {
         ids = ids.concat(collectCases(child.id));
@@ -103,7 +104,7 @@ const AddTestCasesToPlanModal: React.FC<AddTestCasesToPlanModalProps> = ({ isOpe
     const childSections = getChildSections(section.id);
     const sectionCases = getSectionTestCases(section.id);
     // Определяем, выбраны ли все кейсы в разделе (и вложенных)
-    const collectCases = (sid: number): number[] => {
+    const collectCases = (sid: string): string[] => {
       let ids = getSectionTestCases(sid).map(tc => tc.id);
       for (const child of getChildSections(sid)) {
         ids = ids.concat(collectCases(child.id));
@@ -117,8 +118,17 @@ const AddTestCasesToPlanModal: React.FC<AddTestCasesToPlanModalProps> = ({ isOpe
       <div key={section.id} style={{ marginLeft: level * 16 }}>
         <div className="flex items-center py-1">
           {childSections.length > 0 || sectionCases.length > 0 ? (
-            <button type="button" onClick={() => handleToggleSection(section.id)} className="mr-1 text-gray-500 hover:text-gray-800">
-              {expandedSections.has(section.id) ? '▼' : '▶'}
+            <button 
+              type="button" 
+              onClick={() => handleToggleSection(section.id)} 
+              className="mr-1 p-0.5 rounded hover:bg-gray-200 text-gray-500 hover:text-gray-800 focus:outline-none"
+              style={{ lineHeight: 0 }}
+            >
+              {expandedSections.has(section.id) ? (
+                <ChevronDownIcon className="w-4 h-4" />
+              ) : (
+                <ChevronRightIcon className="w-4 h-4" />
+              )}
             </button>
           ) : <span className="mr-4" />}
           <input

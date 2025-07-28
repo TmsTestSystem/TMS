@@ -288,13 +288,28 @@ async function importJsonProject(query: any, projectId: string, repoPath: string
       }
     }
   }
-  // --- Новый блок: импорт разделов с маппингом old_id -> new_id ---
+  // --- Новый блок: импорт разделов с топологической сортировкой ---
   const sectionDir = path.join(repoPath, 'test_case_sections');
   const sectionIdMap: Record<string, string> = {};
   if (fs.existsSync(sectionDir)) {
     const sectionFiles = fs.readdirSync(sectionDir, { encoding: 'utf8' });
-    for (const file of sectionFiles) {
-      const data = JSON.parse(fs.readFileSync(path.join(sectionDir, file), 'utf8'));
+    const sections: any[] = sectionFiles.map((file: string) => JSON.parse(fs.readFileSync(path.join(sectionDir, file), 'utf8')));
+
+    // Топологическая сортировка
+    const sortedSections: any[] = [];
+    const visited: Record<string, boolean> = {};
+    function visit(section: any) {
+      if (visited[section.id]) return;
+      visited[section.id] = true;
+      if (section.parent_id) {
+        const parent = sections.find(s => s.id === section.parent_id);
+        if (parent) visit(parent);
+      }
+      sortedSections.push(section);
+    }
+    sections.forEach(visit);
+
+    for (const data of sortedSections) {
       const oldId = data.id;
       // Проверяем, есть ли уже раздел с таким id
       const res = await query('SELECT id FROM test_case_sections WHERE id = $1', [data.id]);
@@ -369,20 +384,7 @@ async function importJsonProject(query: any, projectId: string, repoPath: string
       );
     }
   }
-  // Импорт разделов (test_case_sections)
-  if (fs.existsSync(sectionDir)) {
-    const sectionFiles = fs.readdirSync(sectionDir, { encoding: 'utf8' });
-    for (const file of sectionFiles) {
-      const data = JSON.parse(fs.readFileSync(path.join(sectionDir, file), 'utf8'));
-      await query(
-        `INSERT INTO test_case_sections (id, project_id, name, parent_id, created_at, updated_at)
-         VALUES ($1,$2,$3,$4,$5,$6)
-         ON CONFLICT (id) DO UPDATE SET
-           project_id=$2, name=$3, parent_id=$4, created_at=$5, updated_at=$6`,
-        [data.id, actualProjectId, data.name, data.parent_id, data.created_at, data.updated_at]
-      );
-    }
-  }
+  // Удалён второй проход по разделам (test_case_sections)
 }
 
 // /export-json и /import-json теперь используют эти функции

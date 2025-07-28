@@ -164,7 +164,7 @@ CREATE INDEX idx_comments_entity ON comments(entity_type, entity_id);
 
 -- Вставка начальных данных
 INSERT INTO users (id, username, email, password_hash, first_name, last_name, role) VALUES
-  ('00000000-0000-0000-0000-000000000001', 'admin', 'admin@spr.com', '$2b$10$rQZ8K9vX2mN3pL4qR5sT6uV7wX8yZ9aA0bB1cC2dE3fF4gG5hH6iI7jJ8kK9lL0mM1nN2oO3pP4qQ5rR6sS7tT8uU9vV0wW1xX2yY3zZ', 'Администратор', 'Системы', 'admin');
+  ('00000000-0000-0000-0000-000000000001', 'admin', 'admin@spr.com', '$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2uheWG/igi.', 'Администратор', 'Системы', 'admin');
 
 INSERT INTO tags (id, name, color) VALUES
   (uuid_generate_v4(), 'Критический', '#EF4444'),

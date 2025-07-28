@@ -33,7 +33,7 @@ interface Project {
 }
 
 const TestCases: React.FC = () => {
-  const { projectId } = useParams<{ projectId: string }>();
+  const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [selectedTestCase, setSelectedTestCase] = useState<TestCase | null>(null);
@@ -45,12 +45,12 @@ const TestCases: React.FC = () => {
   const [gitLoading, setGitLoading] = useState(false);
 
   useEffect(() => {
-    if (projectId) {
+    if (id) {
       fetchProject();
     } else {
       fetchProjects();
     }
-  }, [projectId]);
+  }, [id]);
 
   const fetchProjects = async () => {
     try {
@@ -70,7 +70,7 @@ const TestCases: React.FC = () => {
   const fetchProject = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`/api/projects/${projectId}`);
+      const response = await fetch(`/api/projects/${id}`);
       if (response.ok) {
         const data = await response.json();
         setProject(data);
@@ -189,7 +189,7 @@ const TestCases: React.FC = () => {
   };
 
   // Если нет projectId, показываем список проектов
-  if (!projectId) {
+  if (!id) {
     if (loading) {
       return (
         <div className="flex items-center justify-center h-64">

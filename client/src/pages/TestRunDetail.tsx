@@ -135,6 +135,21 @@ const TestRunDetail: React.FC = () => {
   // Получить кейсы раздела (только те, что есть в results)
   const getSectionResults = (sectionId: string | null) => results.filter(r => r.section_id === sectionId);
 
+  // Функция для проверки, содержит ли раздел (или его подразделы) результаты тестов
+  const hasResultsInSection = (sectionId: string): boolean => {
+    const directResults = getSectionResults(sectionId);
+    if (directResults.length > 0) return true;
+    
+    const childSections = getChildSections(sectionId);
+    return childSections.some(child => hasResultsInSection(child.id));
+  };
+
+  // Функция для получения только тех разделов, которые содержат результаты тестов
+  const getSectionsWithResults = (parentId: string | null) => {
+    const allSections = sections.filter(s => s.parent_id === parentId);
+    return allSections.filter(section => hasResultsInSection(section.id));
+  };
+
   // Рекурсивный рендер раздела
   const renderSection = (section: Section, level: number = 0) => {
     const isExpanded = expandedSections.has(section.id);
@@ -151,14 +166,14 @@ const TestRunDetail: React.FC = () => {
             });
           }}
         >
-          {(childSections.length > 0 || sectionResults.length > 0) && (
+          {(getSectionsWithResults(section.id).length > 0 || sectionResults.length > 0) && (
             isExpanded ? <ChevronDownIcon className="w-4 h-4 mr-1" /> : <ChevronRightIcon className="w-4 h-4 mr-1" />
           )}
           {section.name}
         </div>
         {isExpanded && (
           <div>
-            {childSections.map(child => renderSection(child, level + 1))}
+            {getSectionsWithResults(section.id).map(child => renderSection(child, level + 1))}
             {sectionResults.map(result => renderTestCase(result, level + 1))}
           </div>
         )}
@@ -559,7 +574,7 @@ const TestRunDetail: React.FC = () => {
           </div>
         )}
         <div>
-          {sections.filter(s => s.parent_id === null).map(section => renderSection(section))}
+          {getSectionsWithResults(null).map(section => renderSection(section))}
           {getSectionResults(null).length > 0 && (
             <div className="mt-2">
               <div className="font-semibold text-gray-700" style={{ fontSize: 14 }}>Без раздела</div>

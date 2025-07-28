@@ -124,20 +124,29 @@ const ProjectDetail: React.FC = () => {
     try {
       const response = await fetch(`/api/git/pull?projectId=${id}`, { method: 'POST' });
       const data = await response.json();
-      toast.success(data.message || 'Импорт из Git завершён');
-      fetchTestCases();
+      if (data.success === false || data.error) {
+        toast.error(data.error || 'Ошибка импорта из Git');
+      } else {
+        toast.success(data.message || 'Импорт из Git завершён');
+        fetchTestCases();
+      }
     } catch (e) {
       toast.error('Ошибка импорта из Git');
     } finally {
       setGitLoading(false);
     }
   };
+
   const handleGitPush = async () => {
     setGitLoading(true);
     try {
       const response = await fetch(`/api/git/push?projectId=${id}`, { method: 'POST' });
       const data = await response.json();
-      toast.success(data.message || 'Экспорт в Git завершён');
+      if (data.success === false || data.error) {
+        toast.error(data.error || 'Ошибка экспорта в Git');
+      } else {
+        toast.success(data.message || 'Экспорт в Git завершён');
+      }
     } catch (e) {
       toast.error('Ошибка экспорта в Git');
     } finally {

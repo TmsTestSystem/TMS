@@ -1,20 +1,17 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, ReactNode } from 'react';
 
 interface User {
-  id: number;
+  id: string;
   username: string;
   email: string;
-  firstName: string;
-  lastName: string;
   role: string;
 }
 
 interface AuthContextType {
   user: User | null;
-  token: string | null;
+  isAuthenticated: boolean;
   login: (token: string, user: User) => void;
   logout: () => void;
-  isAuthenticated: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -27,41 +24,35 @@ export const useAuth = () => {
   return context;
 };
 
-export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(null);
-  const [token, setToken] = useState<string | null>(null);
+interface AuthProviderProps {
+  children: ReactNode;
+}
 
-  useEffect(() => {
-    // Проверка сохраненной аутентификации при загрузке
-    const savedToken = localStorage.getItem('token');
-    const savedUser = localStorage.getItem('user');
-    
-    if (savedToken && savedUser) {
-      setToken(savedToken);
-      setUser(JSON.parse(savedUser));
-    }
-  }, []);
+export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
+  // Создаем мокового пользователя-администратора
+  const defaultUser: User = {
+    id: '00000000-0000-0000-0000-000000000001',
+    username: 'admin',
+    email: 'admin@spr.com',
+    role: 'admin'
+  };
 
-  const login = (newToken: string, newUser: User) => {
-    setToken(newToken);
-    setUser(newUser);
-    localStorage.setItem('token', newToken);
-    localStorage.setItem('user', JSON.stringify(newUser));
+  const [user] = useState<User>(defaultUser);
+  const [isAuthenticated] = useState(true);
+
+  const login = (token: string, user: User) => {
+    // Ничего не делаем, так как пользователь всегда авторизован
   };
 
   const logout = () => {
-    setToken(null);
-    setUser(null);
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
+    // Ничего не делаем, так как пользователь всегда авторизован
   };
 
   const value = {
     user,
-    token,
+    isAuthenticated,
     login,
-    logout,
-    isAuthenticated: !!token
+    logout
   };
 
   return (
