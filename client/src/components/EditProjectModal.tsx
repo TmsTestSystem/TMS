@@ -90,9 +90,13 @@ const EditProjectModal: React.FC<EditProjectModalProps> = ({
               type="url"
               value={formData.gitRepoUrl}
               onChange={(e) => setFormData({ ...formData, gitRepoUrl: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50 cursor-not-allowed"
               placeholder="https://github.com/user/repo"
+              disabled
             />
+            <p className="text-xs text-gray-500 mt-1">
+              Git репозиторий нельзя изменить после создания проекта
+            </p>
           </div>
 
           <div className="flex justify-end space-x-3">

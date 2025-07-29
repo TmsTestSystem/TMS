@@ -34,6 +34,18 @@ router.post('/', async (req: Request, res: Response) => {
     if (!name) {
       return res.status(400).json({ error: 'Название проекта обязательно' });
     }
+    // Проверка на уникальность имени
+    const nameCheck = await query('SELECT id FROM projects WHERE name = $1', [name]);
+    if (nameCheck.rows.length > 0) {
+      return res.status(400).json({ error: 'Проект с таким именем уже существует' });
+    }
+    // Проверка на уникальность gitRepoUrl (если указан)
+    if (gitRepoUrl) {
+      const repoCheck = await query('SELECT id FROM projects WHERE git_repo_url = $1', [gitRepoUrl]);
+      if (repoCheck.rows.length > 0) {
+        return res.status(400).json({ error: 'Проект с таким репозиторием уже существует' });
+      }
+    }
     const result = await query(
       'INSERT INTO projects (name, description, git_repo_url, created_at, updated_at) VALUES ($1, $2, $3, NOW(), NOW()) RETURNING *',
       [name, description, gitRepoUrl]

@@ -15,6 +15,7 @@ interface TestPlan {
   test_cases_count?: number;
   created_at: string;
   updated_at: string;
+  canDelete?: boolean; // Added for new functionality
 }
 
 const TestPlans: React.FC = () => {
@@ -42,7 +43,10 @@ const TestPlans: React.FC = () => {
   };
 
   const handleCreateTestPlan = (newTestPlan: TestPlan) => {
-    setTestPlans([newTestPlan, ...testPlans]);
+    // Обновляем данные с сервера после создания
+    setTimeout(() => {
+      fetchTestPlans();
+    }, 100);
   };
 
   const handleUpdateTestPlan = (updatedPlan: TestPlan) => {
@@ -146,50 +150,54 @@ const TestPlans: React.FC = () => {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {testPlans.map((plan) => (
-            <div
-              key={plan.id}
-              className="bg-white rounded-lg shadow p-6 hover:shadow-lg transition-shadow cursor-pointer"
-              onClick={() => navigate(`/test-plans/${plan.id}`)}
-            >
-              <div className="flex items-center gap-2 mb-2">
-                <FileText className="w-5 h-5 text-blue-400" />
-                <h3 className="text-lg font-semibold text-gray-900">{plan.name}</h3>
-              </div>
-              
-              {plan.description && (
-                <p className="text-gray-600 mb-3">{plan.description}</p>
-              )}
-              
-              <div className="flex items-center space-x-6 text-sm text-gray-500">
-                <div className="flex items-center space-x-1">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                  </svg>
-                  <span>{plan.project_name}</span>
-                </div>
-                
-                {plan.test_cases_count !== undefined && (
-                  <div className="flex items-center space-x-1">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                    </svg>
-                    <span>{plan.test_cases_count} тест-кейсов</span>
+            <div key={plan.id} className="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow overflow-hidden max-w-full">
+              <div className="p-6">
+                <div className="flex items-start justify-between mb-4 max-w-full">
+                  <div className="flex items-center gap-2 max-w-[70%]">
+                    <FileText className="w-6 h-6 text-blue-400 mr-1" />
+                    <h3 className="text-xl font-semibold text-gray-900 break-words">
+                      {plan.name}
+                    </h3>
+                    <span className={`ml-2 px-2 py-1 rounded-full text-xs font-semibold ${getStatusColor(plan.status)}`}>{getStatusText(plan.status)}</span>
                   </div>
+                  <div className="flex space-x-2 flex-shrink-0">
+                    <button
+                      onClick={e => {e.stopPropagation(); setEditPlan(plan);}}
+                      className="text-blue-600 hover:text-blue-800 text-sm px-2 py-1 rounded bg-blue-50"
+                      style={{minWidth: 32}}
+                    >
+                      ✏️
+                    </button>
+                    <button
+                      onClick={e => {e.stopPropagation(); handleDeleteTestPlan(plan.id);}}
+                      className="text-red-600 hover:text-red-800 text-sm px-2 py-1 rounded bg-red-50"
+                      style={{minWidth: 32}}
+                    >
+                      🗑️
+                    </button>
+                  </div>
+                </div>
+                {plan.description && (
+                  <p className="text-gray-600 mb-4 break-words max-w-full overflow-hidden">
+                    {plan.description}
+                  </p>
                 )}
-                
-                <div className="flex items-center space-x-1">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                  </svg>
-                  <span>{plan.created_by_name}</span>
+                <div className="bg-gray-50 rounded-md p-3 mb-3 flex flex-col gap-2 text-sm">
+                  <div className="flex items-center gap-2">
+                    <span className="text-gray-400">🧑</span>
+                    <span>{plan.created_by_name}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-gray-400">🗓️</span>
+                    <span>{new Date(plan.created_at).toLocaleDateString('ru-RU')}</span>
+                  </div>
                 </div>
-                
-                <div className="flex items-center space-x-1">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                  </svg>
-                  <span>{new Date(plan.created_at).toLocaleDateString('ru-RU')}</span>
-                </div>
+                <button
+                  onClick={() => navigate(`/test-plans/${plan.id}`)}
+                  className="w-full px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition-colors mt-2"
+                >
+                  Открыть тест-план →
+                </button>
               </div>
             </div>
           ))}

@@ -107,7 +107,6 @@ const CreateTestRunModal: React.FC<CreateTestRunModalProps> = ({
         toast.error(error.error || 'Ошибка создания тестового прогона');
       }
     } catch (error) {
-      console.error('Ошибка создания тестового прогона:', error);
       toast.error('Ошибка создания тестового прогона');
     }
   };

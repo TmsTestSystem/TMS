@@ -13,9 +13,10 @@ interface TestCaseSection {
 interface CreateTestCaseModalProps {
   isOpen: boolean;
   onClose: () => void;
-  projectId: number;
+  projectId: string;
   onSave: (testCase: any) => void;
   sectionId?: string | null;
+  testPlanId?: string;
 }
 
 const CreateTestCaseModal: React.FC<CreateTestCaseModalProps> = ({
@@ -23,7 +24,8 @@ const CreateTestCaseModal: React.FC<CreateTestCaseModalProps> = ({
   onClose,
   projectId,
   onSave,
-  sectionId
+  sectionId,
+  testPlanId
 }) => {
   const [formData, setFormData] = useState({
     title: '',
@@ -98,31 +100,17 @@ const CreateTestCaseModal: React.FC<CreateTestCaseModalProps> = ({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.title.trim() || !formData.steps.trim() || !formData.expectedResult.trim()) {
-      setError('Поля "Заголовок", "Шаги выполнения" и "Ожидаемый результат" обязательны для заполнения.');
+      setError('Заполните все обязательные поля');
       return;
     }
-    setError(null);
-    let sectionIdToSend: string | null = null;
-    if (sectionId !== undefined && sectionId !== null && sectionId !== '') {
-      sectionIdToSend = sectionId;
-    } else if (formData.sectionId !== undefined && formData.sectionId !== null && formData.sectionId !== '') {
-      sectionIdToSend = formData.sectionId;
-    }
-    onSave({
-      projectId,
+    const payload = {
       ...formData,
-      sectionId: sectionIdToSend
-    });
-    setFormData({
-      title: '',
-      description: '',
-      preconditions: '',
-      steps: '',
-      expectedResult: '',
-      priority: 'medium',
-      status: 'draft',
-      sectionId: null
-    });
+      projectId,
+      sectionId: formData.sectionId,
+      testPlanId: testPlanId || undefined
+    };
+    onSave(payload);
+    setFormData({ title: '', description: '', preconditions: '', steps: '', expectedResult: '', priority: 'medium', status: 'draft', sectionId: sectionId ?? null });
     onClose();
   };
 

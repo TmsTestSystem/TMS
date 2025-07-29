@@ -261,7 +261,7 @@ async function exportJsonProject(query: any, projectId: string, repoPath: string
 async function importJsonProject(query: any, projectId: string, repoPath: string) {
   const fs = require('fs');
   const path = require('path');
-  // Сначала импортируем проект и определяем актуальный id по git_repo_url
+  // Используем переданный projectId, не ищем по git_repo_url
   let actualProjectId = projectId;
   let projectGitUrl = null;
   const projectDir = path.join(process.cwd(), 'repo_data', 'projects');
@@ -278,15 +278,11 @@ async function importJsonProject(query: any, projectId: string, repoPath: string
              name=$2, description=$3, git_repo_url=$4, git_branch=$5, created_by=$6, created_at=$7, updated_at=$8`,
           [data.id, data.name, data.description, data.git_repo_url, data.git_branch, data.created_by, data.created_at, data.updated_at]
         );
+        break; // Нашли нужный проект, выходим из цикла
       }
     }
-    // Если есть git_repo_url, ищем проект в базе по нему
-    if (projectGitUrl) {
-      const result = await query('SELECT id FROM projects WHERE git_repo_url = $1', [projectGitUrl]);
-      if (result.rows.length) {
-        actualProjectId = result.rows[0].id;
-      }
-    }
+    // УБИРАЕМ проблемную логику поиска по git_repo_url
+    // Теперь всегда используем переданный projectId
   }
   // --- Новый блок: импорт разделов с топологической сортировкой ---
   const sectionDir = path.join(repoPath, 'test_case_sections');
@@ -334,9 +330,24 @@ async function importJsonProject(query: any, projectId: string, repoPath: string
   const caseDir = path.join(repoPath, 'test_cases');
   if (fs.existsSync(caseDir)) {
     const caseFiles = fs.readdirSync(caseDir, { encoding: 'utf8' });
+    console.log(`[Git Import] Найдено ${caseFiles.length} файлов тест-кейсов в репозитории`);
+    let importedCount = 0;
     for (const file of caseFiles) {
       const data = JSON.parse(fs.readFileSync(path.join(caseDir, file), 'utf8'));
       data.project_id = actualProjectId;
+      // Если test_plan_id не задан, а в проекте только один тест-план — проставляем его
+      if (!data.test_plan_id) {
+        const planDir = path.join(repoPath, 'test_plans');
+        let planId = null;
+        if (fs.existsSync(planDir)) {
+          const planFiles = fs.readdirSync(planDir, { encoding: 'utf8' });
+          if (planFiles.length === 1) {
+            const planData = JSON.parse(fs.readFileSync(path.join(planDir, planFiles[0]), 'utf8'));
+            planId = planData.id;
+          }
+        }
+        if (planId) data.test_plan_id = planId;
+      }
       // Проверяем section_id через маппинг
       let sectionId = data.section_id;
       if (sectionId && sectionIdMap[sectionId]) {
@@ -351,7 +362,9 @@ async function importJsonProject(query: any, projectId: string, repoPath: string
            project_id=$2, test_plan_id=$3, title=$4, description=$5, preconditions=$6, steps=$7, expected_result=$8, priority=$9, status=$10, created_by=$11, assigned_to=$12, section_id=$13, created_at=$14, updated_at=$15`,
         [data.id, data.project_id, data.test_plan_id, data.title, data.description, data.preconditions, data.steps, data.expected_result, data.priority, data.status, data.created_by, data.assigned_to, sectionId, data.created_at, data.updated_at]
       );
+      importedCount++;
     }
+    console.log(`[Git Import] Импортировано ${importedCount} тест-кейсов для проекта ${actualProjectId}`);
   }
   // Импорт тест-планов
   const planDir = path.join(repoPath, 'test_plans');

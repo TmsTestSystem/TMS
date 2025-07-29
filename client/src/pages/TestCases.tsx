@@ -154,16 +154,21 @@ const TestCases: React.FC = () => {
     if (!project) return;
     setGitLoading(true);
     try {
+      console.log(`[TestCases] Начинаем Git pull для проекта ${project.id}`);
       const response = await fetch(`/api/git/pull?projectId=${project.id}`, { method: 'POST' });
       if (response.ok) {
         const data = await response.json();
+        console.log(`[TestCases] Git pull успешен:`, data.message);
         toast.success(data.message || 'Импорт из Git завершён');
+        console.log(`[TestCases] Обновляем refreshTrigger с ${refreshTrigger} на ${refreshTrigger + 1}`);
         setRefreshTrigger(prev => prev + 1);
       } else {
         const errorMessage = await handleApiError(response);
+        console.error(`[TestCases] Git pull ошибка:`, errorMessage);
         toast.error(errorMessage);
       }
     } catch (e) {
+      console.error(`[TestCases] Git pull исключение:`, e);
       toast.error('Ошибка импорта из Git');
     } finally {
       setGitLoading(false);

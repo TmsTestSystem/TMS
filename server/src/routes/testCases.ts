@@ -30,12 +30,15 @@ router.get('/section/:sectionId', async (req: Request, res: Response) => {
 router.get('/project/:projectId', async (req: Request, res: Response) => {
   try {
     const { projectId } = req.params;
+    console.log(`[API] Запрос тест-кейсов для проекта ${projectId}`);
     const result = await query(
       'SELECT * FROM test_cases WHERE project_id = $1 ORDER BY id DESC',
       [projectId]
     );
+    console.log(`[API] Найдено ${result.rows.length} тест-кейсов для проекта ${projectId}`);
     return res.json(result.rows);
   } catch (error) {
+    console.error(`[API] Ошибка получения тест-кейсов проекта ${req.params.projectId}:`, error);
     return res.status(500).json({ error: 'Ошибка получения тест-кейсов проекта' });
   }
 });

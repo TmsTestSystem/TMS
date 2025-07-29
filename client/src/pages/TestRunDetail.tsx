@@ -514,6 +514,22 @@ const TestRunDetail: React.FC = () => {
     toast.success('HTML-отчёт успешно сформирован!');
   };
 
+  // --- Завершение прогона ---
+  const handleCompleteRun = async () => {
+    if (!testRun) return;
+    try {
+      const response = await fetch(`/api/test-runs/${testRun.id}/complete`, { method: 'POST' });
+      if (response.ok) {
+        toast.success('Прогон успешно завершён!');
+        fetchData(testRun.id);
+      } else {
+        toast.error('Ошибка завершения прогона');
+      }
+    } catch (e) {
+      toast.error('Ошибка завершения прогона');
+    }
+  };
+
   if (loading) return <div className="p-8 text-center">Загрузка...</div>;
   if (!testRun) return <div className="p-8 text-center text-red-500">Прогон не найден</div>;
 
@@ -522,6 +538,17 @@ const TestRunDetail: React.FC = () => {
       <div className="p-8 space-y-6">
         <h1 className="text-2xl font-bold">Тестовый прогон: {testRun?.test_plan_name}</h1>
         <div className="text-gray-600 mb-4">{testRun?.description}</div>
+        {/* Кнопка завершения прогона */}
+        {testRun?.status === 'in_progress' && (
+          <div className="mb-6 flex justify-end">
+            <button
+              className="px-6 py-2 bg-green-600 text-white rounded-lg shadow hover:bg-green-700 transition font-semibold text-lg"
+              onClick={handleCompleteRun}
+            >
+              Завершить прогон
+            </button>
+          </div>
+        )}
         {testRun?.status === 'completed' && total > 0 && (
           <div className="mb-8 flex justify-center">
             <div className="bg-white rounded-2xl shadow-xl px-8 py-6 flex flex-col md:flex-row md:items-center gap-8 w-full max-w-2xl border border-gray-100">

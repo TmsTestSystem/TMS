@@ -30,7 +30,7 @@ interface TestCase {
 }
 
 interface TestCaseTreeProps {
-  projectId: number;
+  projectId: string;
   onTestCaseSelect: (testCase: TestCase) => void;
   onTestCaseCreate: () => void;
   onTestCaseEdit: (testCase: TestCase) => void;
@@ -106,6 +106,7 @@ const TestCaseTree: React.FC<TestCaseTreeProps> = ({
   const loadData = async () => {
     try {
       setLoading(true);
+      console.log(`[TestCaseTree] Загружаем данные для проекта ${projectId}, refreshTrigger=${refreshTrigger}`);
       const [sectionsRes, testCasesRes] = await Promise.all([
         fetch(`/api/test-case-sections/project/${projectId}`),
         fetch(`/api/test-cases/project/${projectId}`)
@@ -114,6 +115,7 @@ const TestCaseTree: React.FC<TestCaseTreeProps> = ({
       if (sectionsRes.ok && testCasesRes.ok) {
         const sectionsData = await sectionsRes.json();
         const testCasesData = await testCasesRes.json();
+        console.log(`[TestCaseTree] Загружено ${sectionsData.length} разделов и ${testCasesData.length} тест-кейсов для проекта ${projectId}`);
         setSections(sectionsData);
         setTestCases(testCasesData);
       }

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import ProjectModal from '../components/ProjectModal.tsx';
 import EditProjectModal from '../components/EditProjectModal.tsx';
+import { toast } from 'react-toastify';
 
 interface Project {
   id: number;
@@ -63,10 +64,11 @@ const Projects: React.FC = () => {
         const newProject = await response.json();
         setProjects([newProject, ...projects]);
       } else {
-        console.error('Ошибка создания проекта');
+        const error = await response.json();
+        toast.error(error.error || 'Ошибка создания проекта');
       }
     } catch (error) {
-      console.error('Ошибка создания проекта:', error);
+      toast.error('Ошибка создания проекта');
     }
   };
 
