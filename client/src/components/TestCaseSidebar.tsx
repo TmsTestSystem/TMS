@@ -8,6 +8,7 @@ interface TestCase {
   preconditions?: string;
   steps?: string;
   expectedResult?: string;
+  expected_result?: string;
   priority: string;
   status: string;
   createdAt?: string;
@@ -102,13 +103,11 @@ const TestCaseSidebar: React.FC<TestCaseSidebarProps> = ({ isOpen, onClose, test
         <div className="flex-1 pr-4">
           <div className="flex items-center gap-2 mb-2">
             <h2
-              className="text-xl font-bold leading-tight mr-2 break-words truncate max-w-[90vw] max-w-[600px]"
-              style={{wordBreak: 'break-word'}}
+              className="text-xl font-bold leading-tight mr-2 break-words"
+              style={{wordBreak: 'break-word', overflowWrap: 'break-word'}}
               title={currentTestCase.title}
             >
-              {currentTestCase.title && currentTestCase.title.length > 100
-                ? currentTestCase.title.slice(0, 100) + '…'
-                : currentTestCase.title}
+              {currentTestCase.title}
             </h2>
             {/* Кнопка редактирования убрана */}
           </div>
@@ -211,16 +210,16 @@ const TestCaseSidebar: React.FC<TestCaseSidebarProps> = ({ isOpen, onClose, test
         )}
 
         {/* Expected Result */}
-        {currentTestCase.expectedResult && (
+        {(currentTestCase.expectedResult || currentTestCase.expected_result) && (
           <div className="bg-white border rounded-lg p-4 mb-6 shadow-sm">
             <div className="flex items-center gap-2 mb-3">
               <ExclamationTriangleIcon className="w-5 h-5 text-orange-500" />
               <h3 className="text-lg font-semibold text-gray-800">Ожидаемый результат</h3>
             </div>
-            <div className="text-gray-700 break-words whitespace-pre-line leading-relaxed text-sm" title={currentTestCase.expectedResult}>
-              {currentTestCase.expectedResult && currentTestCase.expectedResult.length > 200
-                ? currentTestCase.expectedResult.slice(0, 200) + '…'
-                : currentTestCase.expectedResult}
+            <div className="text-gray-700 break-words whitespace-pre-line leading-relaxed text-sm" title={currentTestCase.expectedResult || currentTestCase.expected_result || ''}>
+              {(currentTestCase.expectedResult || currentTestCase.expected_result) && (currentTestCase.expectedResult || currentTestCase.expected_result || '').length > 200
+                ? (currentTestCase.expectedResult || currentTestCase.expected_result || '').slice(0, 200) + '…'
+                : (currentTestCase.expectedResult || currentTestCase.expected_result || '')}
             </div>
           </div>
         )}

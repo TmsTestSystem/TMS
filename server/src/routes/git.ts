@@ -326,6 +326,25 @@ async function importJsonProject(query: any, projectId: string, repoPath: string
       sectionIdMap[oldId] = newId;
     }
   }
+  // Импорт тест-планов (сначала!)
+  const planDir = path.join(repoPath, 'test_plans');
+  if (fs.existsSync(planDir)) {
+    const planFiles = fs.readdirSync(planDir, { encoding: 'utf8' });
+    console.log(`[Git Import] Найдено ${planFiles.length} файлов тест-планов в репозитории`);
+    for (const file of planFiles) {
+      const data = JSON.parse(fs.readFileSync(path.join(planDir, file), 'utf8'));
+      data.project_id = actualProjectId;
+      await query(
+        `INSERT INTO test_plans (id, project_id, name, description, status, created_by, created_at, updated_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+         ON CONFLICT (id) DO UPDATE SET
+           project_id=$2, name=$3, description=$4, status=$5, created_by=$6, created_at=$7, updated_at=$8`,
+        [data.id, data.project_id, data.name, data.description, data.status, data.created_by, data.created_at, data.updated_at]
+      );
+    }
+    console.log(`[Git Import] Импортировано ${planFiles.length} тест-планов для проекта ${actualProjectId}`);
+  }
+  
   // --- Импорт тест-кейсов с учётом маппинга section_id ---
   const caseDir = path.join(repoPath, 'test_cases');
   if (fs.existsSync(caseDir)) {
@@ -335,9 +354,19 @@ async function importJsonProject(query: any, projectId: string, repoPath: string
     for (const file of caseFiles) {
       const data = JSON.parse(fs.readFileSync(path.join(caseDir, file), 'utf8'));
       data.project_id = actualProjectId;
+      // Проверяем и исправляем test_plan_id
+      let testPlanId = data.test_plan_id;
+      if (testPlanId) {
+        // Проверяем, существует ли тест-план с таким id
+        const planCheck = await query('SELECT id FROM test_plans WHERE id = $1', [testPlanId]);
+        if (planCheck.rows.length === 0) {
+          console.log(`[Git Import] Тест-план с id ${testPlanId} не найден, устанавливаем null`);
+          testPlanId = null;
+        }
+      }
+      
       // Если test_plan_id не задан, а в проекте только один тест-план — проставляем его
-      if (!data.test_plan_id) {
-        const planDir = path.join(repoPath, 'test_plans');
+      if (!testPlanId) {
         let planId = null;
         if (fs.existsSync(planDir)) {
           const planFiles = fs.readdirSync(planDir, { encoding: 'utf8' });
@@ -346,7 +375,13 @@ async function importJsonProject(query: any, projectId: string, repoPath: string
             planId = planData.id;
           }
         }
-        if (planId) data.test_plan_id = planId;
+        if (planId) {
+          // Проверяем, существует ли этот тест-план в БД
+          const planCheck = await query('SELECT id FROM test_plans WHERE id = $1', [planId]);
+          if (planCheck.rows.length > 0) {
+            testPlanId = planId;
+          }
+        }
       }
       // Проверяем section_id через маппинг
       let sectionId = data.section_id;
@@ -360,27 +395,11 @@ async function importJsonProject(query: any, projectId: string, repoPath: string
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
          ON CONFLICT (id) DO UPDATE SET
            project_id=$2, test_plan_id=$3, title=$4, description=$5, preconditions=$6, steps=$7, expected_result=$8, priority=$9, status=$10, created_by=$11, assigned_to=$12, section_id=$13, created_at=$14, updated_at=$15`,
-        [data.id, data.project_id, data.test_plan_id, data.title, data.description, data.preconditions, data.steps, data.expected_result, data.priority, data.status, data.created_by, data.assigned_to, sectionId, data.created_at, data.updated_at]
+        [data.id, data.project_id, testPlanId, data.title, data.description, data.preconditions, data.steps, data.expected_result, data.priority, data.status, data.created_by, data.assigned_to, sectionId, data.created_at, data.updated_at]
       );
       importedCount++;
     }
     console.log(`[Git Import] Импортировано ${importedCount} тест-кейсов для проекта ${actualProjectId}`);
-  }
-  // Импорт тест-планов
-  const planDir = path.join(repoPath, 'test_plans');
-  if (fs.existsSync(planDir)) {
-    const planFiles = fs.readdirSync(planDir, { encoding: 'utf8' });
-    for (const file of planFiles) {
-      const data = JSON.parse(fs.readFileSync(path.join(planDir, file), 'utf8'));
-      data.project_id = actualProjectId;
-      await query(
-        `INSERT INTO test_plans (id, project_id, name, description, status, created_by, created_at, updated_at)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
-         ON CONFLICT (id) DO UPDATE SET
-           project_id=$2, name=$3, description=$4, status=$5, created_by=$6, created_at=$7, updated_at=$8`,
-        [data.id, data.project_id, data.name, data.description, data.status, data.created_by, data.created_at, data.updated_at]
-      );
-    }
   }
   // Импорт тестовых прогонов
   const runDir = path.join(repoPath, 'test_runs');
