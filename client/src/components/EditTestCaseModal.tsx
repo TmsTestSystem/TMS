@@ -11,10 +11,10 @@ interface TestCaseSection {
 }
 
 interface TestCase {
-  id: number;
-  project_id: number;
-  test_plan_id: number | null;
-  section_id: number | null;
+  id: string;
+  project_id: string;
+  test_plan_id: string | null;
+  section_id: string | null;
   title: string;
   description: string;
   preconditions: string;
@@ -45,7 +45,7 @@ const EditTestCaseModal: React.FC<EditTestCaseModalProps> = ({
     expectedResult: '',
     priority: 'medium',
     status: 'draft',
-    sectionId: null as number | null
+    sectionId: null as string | null
   });
   const [sections, setSections] = useState<TestCaseSection[]>([]);
   const [loadingSections, setLoadingSections] = useState(false);
@@ -84,7 +84,7 @@ const EditTestCaseModal: React.FC<EditTestCaseModalProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, onClose]);
 
-  const loadSections = async (projectId: number) => {
+  const loadSections = async (projectId: string) => {
     try {
       setLoadingSections(true);
       const response = await fetch(`/api/test-case-sections/project/${projectId}`);
@@ -110,6 +110,7 @@ const EditTestCaseModal: React.FC<EditTestCaseModalProps> = ({
     onSave({
       ...testCase,
       ...formData,
+      expected_result: formData.expectedResult,
       section_id: formData.sectionId,
     });
     onClose();
@@ -139,7 +140,7 @@ const EditTestCaseModal: React.FC<EditTestCaseModalProps> = ({
             <label className="block text-sm font-medium text-gray-700 mb-2">Раздел</label>
             <select
               value={formData.sectionId || ''}
-              onChange={(e) => setFormData({ ...formData, sectionId: e.target.value ? Number(e.target.value) : null })}
+              onChange={(e) => setFormData({ ...formData, sectionId: e.target.value || null })}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               disabled={loadingSections}
             >
