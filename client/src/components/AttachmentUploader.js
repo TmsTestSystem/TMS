@@ -36,9 +36,16 @@ const AttachmentUploader = ({
     }
   };
 
+  const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 МБ
+
   const handleFileSelect = (e) => {
     const file = e.target.files[0];
     if (file) {
+      if (file.size > MAX_FILE_SIZE) {
+        alert('Файл слишком большой! Максимальный размер — 10 МБ.');
+        e.target.value = '';
+        return;
+      }
       setSelectedFile(file);
     }
   };

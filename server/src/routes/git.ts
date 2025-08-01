@@ -124,6 +124,53 @@ async function exportJsonDirect(query: any) {
       JSON.stringify(r, null, 2)
     );
   }
+
+  // Экспорт attachments
+  if (!fs.existsSync(path.join(process.cwd(), 'repo_data', 'attachments'))) {
+    fs.mkdirSync(path.join(process.cwd(), 'repo_data', 'attachments'), { recursive: true });
+  }
+  if (!fs.existsSync(path.join(process.cwd(), 'repo_data', 'attachments', 'metadata'))) {
+    fs.mkdirSync(path.join(process.cwd(), 'repo_data', 'attachments', 'metadata'), { recursive: true });
+  }
+  if (!fs.existsSync(path.join(process.cwd(), 'repo_data', 'attachments', 'files'))) {
+    fs.mkdirSync(path.join(process.cwd(), 'repo_data', 'attachments', 'files'), { recursive: true });
+  }
+
+  const attachments = await query('SELECT * FROM attachments');
+  const attachmentsMetadata = [];
+  
+  for (const attachment of attachments.rows) {
+    const attachmentData = { ...attachment };
+    
+    // Копируем файл из локальной файловой системы в repo_data
+    const sourceFilePath = attachment.file_path;
+    const fileName = attachment.filename;
+    const targetFilePath = path.join(process.cwd(), 'repo_data', 'attachments', 'files', fileName);
+    
+    if (fs.existsSync(sourceFilePath)) {
+      try {
+        fs.copyFileSync(sourceFilePath, targetFilePath);
+        console.log(`[Export] Скопирован файл: ${fileName}`);
+      } catch (error) {
+        console.error(`[Export] Ошибка копирования файла ${fileName}:`, error);
+      }
+    } else {
+      console.warn(`[Export] Файл не найден: ${sourceFilePath}`);
+    }
+    
+    // Убираем локальный путь к файлу из метаданных
+    delete attachmentData.file_path;
+    attachmentsMetadata.push(attachmentData);
+  }
+  
+  // Сохраняем метаданные attachments
+  if (attachmentsMetadata.length > 0) {
+    fs.writeFileSync(
+      path.join(process.cwd(), 'repo_data', 'attachments', 'metadata', 'attachments.json'),
+      JSON.stringify(attachmentsMetadata, null, 2)
+    );
+    console.log(`[Export] Экспортировано ${attachmentsMetadata.length} attachments`);
+  }
 }
 
 // Вынесенная функция импорта
@@ -177,6 +224,66 @@ async function importJsonDirect(query: any) {
          test_plan_id=$2, name=$3, description=$4, status=$5, started_by=$6, created_at=$7`,
       [data.id, data.test_plan_id, data.name, data.description, data.status, data.started_by, data.created_at]
     );
+  }
+
+  // Импорт attachments
+  const attachmentsMetadataPath = path.join(process.cwd(), 'repo_data', 'attachments', 'metadata', 'attachments.json');
+  if (fs.existsSync(attachmentsMetadataPath)) {
+    try {
+      const attachmentsMetadata = JSON.parse(fs.readFileSync(attachmentsMetadataPath, 'utf8'));
+      const attachmentsFilesDir = path.join(process.cwd(), 'repo_data', 'attachments', 'files');
+      
+      for (const attachmentData of attachmentsMetadata) {
+        const fileName = attachmentData.filename;
+        const sourceFilePath = path.join(attachmentsFilesDir, fileName);
+        const targetFilePath = path.join(process.cwd(), 'uploads', fileName);
+        
+        // Копируем файл из repo_data в локальную файловую систему
+        if (fs.existsSync(sourceFilePath)) {
+          try {
+            // Создаем папку uploads если её нет
+            if (!fs.existsSync(path.join(process.cwd(), 'uploads'))) {
+              fs.mkdirSync(path.join(process.cwd(), 'uploads'), { recursive: true });
+            }
+            
+            fs.copyFileSync(sourceFilePath, targetFilePath);
+            console.log(`[Import] Скопирован файл: ${fileName}`);
+          } catch (error) {
+            console.error(`[Import] Ошибка копирования файла ${fileName}:`, error);
+          }
+        } else {
+          console.warn(`[Import] Файл не найден в repo_data: ${sourceFilePath}`);
+        }
+        
+        // Восстанавливаем локальный путь к файлу
+        attachmentData.file_path = targetFilePath;
+        
+        // Импортируем запись в БД
+        await query(
+          `INSERT INTO attachments (id, test_case_id, filename, original_filename, file_path, file_size, mime_type, description, uploaded_by, created_at, updated_at)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+           ON CONFLICT (id) DO UPDATE SET
+             test_case_id=$2, filename=$3, original_filename=$4, file_path=$5, file_size=$6, mime_type=$7, description=$8, uploaded_by=$9, created_at=$10, updated_at=$11`,
+          [
+            attachmentData.id,
+            attachmentData.test_case_id,
+            attachmentData.filename,
+            attachmentData.original_filename,
+            attachmentData.file_path,
+            attachmentData.file_size,
+            attachmentData.mime_type,
+            attachmentData.description,
+            attachmentData.uploaded_by,
+            attachmentData.created_at,
+            attachmentData.updated_at
+          ]
+        );
+      }
+      
+      console.log(`[Import] Импортировано ${attachmentsMetadata.length} attachments`);
+    } catch (error) {
+      console.error('[Import] Ошибка импорта attachments:', error);
+    }
   }
 }
 
@@ -253,6 +360,89 @@ async function exportJsonProject(query: any, projectId: string, repoPath: string
       path.join(repoPath, 'test_case_sections', `section-${s.id}.json`),
       JSON.stringify(s, null, 2)
     );
+  }
+
+  // Экспорт attachments
+  if (!fs.existsSync(path.join(repoPath, 'attachments'))) fs.mkdirSync(path.join(repoPath, 'attachments'), { recursive: true });
+  if (!fs.existsSync(path.join(repoPath, 'attachments', 'metadata'))) fs.mkdirSync(path.join(repoPath, 'attachments', 'metadata'), { recursive: true });
+  if (!fs.existsSync(path.join(repoPath, 'attachments', 'files'))) fs.mkdirSync(path.join(repoPath, 'attachments', 'files'), { recursive: true });
+
+  // Получаем все attachments для тест-кейсов этого проекта (включая удаленные)
+  const attachments = await query(`
+    SELECT a.*, tc.project_id 
+    FROM attachments a 
+    JOIN test_cases tc ON a.test_case_id = tc.id 
+    WHERE tc.project_id = $1
+  `, [projectId]);
+
+  // Получаем список всех файлов, которые были в репозитории ранее
+  const existingFiles = new Set<string>();
+  const attachmentsMetadataPath = path.join(repoPath, 'attachments', 'metadata', 'attachments.json');
+  if (fs.existsSync(attachmentsMetadataPath)) {
+    try {
+      const existingMetadata = JSON.parse(fs.readFileSync(attachmentsMetadataPath, 'utf8'));
+      existingMetadata.forEach((att: any) => existingFiles.add(att.filename));
+    } catch (error) {
+      console.warn('[Git Export] Ошибка чтения существующих метаданных attachments:', error);
+    }
+  }
+
+  const attachmentsMetadata = [];
+  const currentFiles = new Set<string>();
+  
+  for (const attachment of attachments.rows) {
+    const attachmentData = { ...attachment };
+    currentFiles.add(attachment.filename);
+    
+    // Копируем файл из локальной файловой системы в Git репозиторий
+    const sourceFilePath = attachment.file_path;
+    const fileName = attachment.filename;
+    const targetFilePath = path.join(repoPath, 'attachments', 'files', fileName);
+    
+    if (fs.existsSync(sourceFilePath)) {
+      try {
+        fs.copyFileSync(sourceFilePath, targetFilePath);
+        console.log(`[Git Export] Скопирован файл: ${fileName}`);
+      } catch (error) {
+        console.error(`[Git Export] Ошибка копирования файла ${fileName}:`, error);
+      }
+    } else {
+      console.warn(`[Git Export] Файл не найден: ${sourceFilePath}`);
+    }
+    
+    // Убираем локальный путь к файлу из метаданных
+    delete attachmentData.file_path;
+    attachmentsMetadata.push(attachmentData);
+  }
+  
+  // Удаляем файлы, которые больше не существуют в БД
+  const filesToDelete = Array.from(existingFiles).filter(filename => !currentFiles.has(filename));
+  for (const filename of filesToDelete) {
+    const filePath = path.join(repoPath, 'attachments', 'files', filename);
+    if (fs.existsSync(filePath)) {
+      try {
+        fs.unlinkSync(filePath);
+        console.log(`[Git Export] Удален файл: ${filename}`);
+      } catch (error) {
+        console.error(`[Git Export] Ошибка удаления файла ${filename}:`, error);
+      }
+    }
+  }
+  
+  // Сохраняем метаданные attachments
+  if (attachmentsMetadata.length > 0) {
+    fs.writeFileSync(
+      path.join(repoPath, 'attachments', 'metadata', 'attachments.json'),
+      JSON.stringify(attachmentsMetadata, null, 2)
+    );
+    console.log(`[Git Export] Экспортировано ${attachmentsMetadata.length} attachments`);
+  } else {
+    // Если нет attachments, создаем пустой файл метаданных
+    fs.writeFileSync(
+      path.join(repoPath, 'attachments', 'metadata', 'attachments.json'),
+      JSON.stringify([], null, 2)
+    );
+    console.log(`[Git Export] Создан пустой файл метаданных attachments`);
   }
 }
 
@@ -420,6 +610,123 @@ async function importJsonProject(query: any, projectId: string, repoPath: string
       );
     }
   }
+
+  // Импорт attachments
+  const attachmentsMetadataPath = path.join(repoPath, 'attachments', 'metadata', 'attachments.json');
+  if (fs.existsSync(attachmentsMetadataPath)) {
+    try {
+      const attachmentsMetadata = JSON.parse(fs.readFileSync(attachmentsMetadataPath, 'utf8'));
+      const attachmentsFilesDir = path.join(repoPath, 'attachments', 'files');
+      
+      // Получаем список всех attachments, которые есть в репозитории
+      const repoAttachments = new Set<string>();
+      
+      for (const attachmentData of attachmentsMetadata) {
+        repoAttachments.add(attachmentData.id);
+        const fileName = attachmentData.filename;
+        const sourceFilePath = path.join(attachmentsFilesDir, fileName);
+        const targetFilePath = path.join(process.cwd(), 'uploads', fileName);
+        
+        // Копируем файл из Git репозитория в локальную файловую систему
+        if (fs.existsSync(sourceFilePath)) {
+          try {
+            // Создаем папку uploads если её нет
+            if (!fs.existsSync(path.join(process.cwd(), 'uploads'))) {
+              fs.mkdirSync(path.join(process.cwd(), 'uploads'), { recursive: true });
+            }
+            
+            fs.copyFileSync(sourceFilePath, targetFilePath);
+            console.log(`[Git Import] Скопирован файл: ${fileName}`);
+          } catch (error) {
+            console.error(`[Git Import] Ошибка копирования файла ${fileName}:`, error);
+          }
+        } else {
+          console.warn(`[Git Import] Файл не найден в репозитории: ${sourceFilePath}`);
+        }
+        
+        // Восстанавливаем локальный путь к файлу
+        attachmentData.file_path = targetFilePath;
+        
+        // Импортируем запись в БД
+        await query(
+          `INSERT INTO attachments (id, test_case_id, filename, original_filename, file_path, file_size, mime_type, description, uploaded_by, is_deleted, deleted_at, created_at, updated_at)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+           ON CONFLICT (id) DO UPDATE SET
+             test_case_id=$2, filename=$3, original_filename=$4, file_path=$5, file_size=$6, mime_type=$7, description=$8, uploaded_by=$9, is_deleted=$10, deleted_at=$11, created_at=$12, updated_at=$13`,
+          [
+            attachmentData.id,
+            attachmentData.test_case_id,
+            attachmentData.filename,
+            attachmentData.original_filename,
+            attachmentData.file_path,
+            attachmentData.file_size,
+            attachmentData.mime_type,
+            attachmentData.description,
+            defaultUserId,
+            attachmentData.is_deleted || false,
+            attachmentData.deleted_at,
+            attachmentData.created_at,
+            attachmentData.updated_at
+          ]
+        );
+      }
+      
+      // Удаляем attachments, которых больше нет в репозитории
+      const localAttachments = await query(`
+        SELECT a.id, a.filename, a.file_path
+        FROM attachments a 
+        JOIN test_cases tc ON a.test_case_id = tc.id 
+        WHERE tc.project_id = $1
+      `, [actualProjectId]);
+      
+      for (const localAttachment of localAttachments.rows) {
+        if (!repoAttachments.has(localAttachment.id)) {
+          // Удаляем запись из БД
+          await query('DELETE FROM attachments WHERE id = $1', [localAttachment.id]);
+          
+          // Удаляем файл из локальной файловой системы
+          if (fs.existsSync(localAttachment.file_path)) {
+            try {
+              fs.unlinkSync(localAttachment.file_path);
+              console.log(`[Git Import] Удален локальный файл: ${localAttachment.filename}`);
+            } catch (error) {
+              console.error(`[Git Import] Ошибка удаления локального файла ${localAttachment.filename}:`, error);
+            }
+          }
+        }
+      }
+      
+      console.log(`[Git Import] Импортировано ${attachmentsMetadata.length} attachments`);
+    } catch (error) {
+      console.error('[Git Import] Ошибка импорта attachments:', error);
+    }
+  } else {
+    // Если файл метаданных не существует, удаляем все attachments для этого проекта
+    const localAttachments = await query(`
+      SELECT a.id, a.filename, a.file_path
+      FROM attachments a 
+      JOIN test_cases tc ON a.test_case_id = tc.id 
+      WHERE tc.project_id = $1
+    `, [actualProjectId]);
+    
+    for (const localAttachment of localAttachments.rows) {
+      // Удаляем запись из БД
+      await query('DELETE FROM attachments WHERE id = $1', [localAttachment.id]);
+      
+      // Удаляем файл из локальной файловой системы
+      if (fs.existsSync(localAttachment.file_path)) {
+        try {
+          fs.unlinkSync(localAttachment.file_path);
+          console.log(`[Git Import] Удален локальный файл: ${localAttachment.filename}`);
+        } catch (error) {
+          console.error(`[Git Import] Ошибка удаления локального файла ${localAttachment.filename}:`, error);
+        }
+      }
+    }
+    
+    console.log(`[Git Import] Удалено ${localAttachments.rows.length} attachments (файл метаданных не найден)`);
+  }
+  
   // Удалён второй проход по разделам (test_case_sections)
 }
 
