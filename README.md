@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # TMS_NEXT — Система управления тестированием
 
 Современная система управления тестированием с интеграцией Git и поддержкой Docker.
@@ -11,7 +10,7 @@ git clone <repository-url>
 cd TMS_NEXT
 cp .env.example .env
 # Docker (рекомендуется)
-docker compose up -d --build
+docker-compose up -d --build
 # Для разработки
 npm run install:all
 npm run dev
@@ -22,7 +21,7 @@ npm run dev
 ```
 GIT_TOKEN=ваш_токен_github
 DB_HOST=postgres
-DB_PORT=5432
+DB_PORT=55432
 DB_USER=tms_user
 DB_PASSWORD=tms_password
 DB_NAME=tms
@@ -40,15 +39,23 @@ DB_NAME=tms
 ## 📁 Структура
 ```
 TMS_NEXT/
-├── server/    # Backend
-├── client/    # Frontend
+├── server/           # Backend
+├── client/           # Frontend
+├── db_init/          # Автоматические миграции БД
+├── migrations/       # Ручные миграции
 ├── docker-compose.yml
-├── nginx.conf
-└── init-db.sql
+└── nginx.conf
 ```
 
+## 🔄 Автоматические миграции
+
+База данных автоматически инициализируется при запуске. Все миграции применяются в правильном порядке:
+
+- `01-init-db.sql` - Основная инициализация
+- `02-add-soft-delete-fields.sql` - Поля soft delete
+- `03-add-attachments-table.sql` - Таблица вложений
+
+Подробности в [DATABASE_MIGRATIONS.md](DATABASE_MIGRATIONS.md)
+
 ## 📝 Лицензия
-MIT License 
-=======
-# TMS
->>>>>>> ed78fbb56555ac596e2df1ad3bfa1e40800e540c
+MIT License

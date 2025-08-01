@@ -260,6 +260,11 @@ async function exportJsonProject(query: any, projectId: string, repoPath: string
 async function importJsonProject(query: any, projectId: string, repoPath: string) {
   const fs = require('fs');
   const path = require('path');
+  
+  // Получаем ID существующего пользователя (admin)
+  const userResult = await query('SELECT id FROM users WHERE username = $1', ['admin']);
+  const defaultUserId = userResult.rows[0]?.id || '550e8400-e29b-41d4-a716-446655440000';
+  
   // Используем переданный projectId, не ищем по git_repo_url
   let actualProjectId = projectId;
   let projectGitUrl = null;
@@ -275,7 +280,7 @@ async function importJsonProject(query: any, projectId: string, repoPath: string
            VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
            ON CONFLICT (id) DO UPDATE SET
              name=$2, description=$3, git_repo_url=$4, git_branch=$5, created_by=$6, created_at=$7, updated_at=$8`,
-          [data.id, data.name, data.description, data.git_repo_url, data.git_branch, data.created_by, data.created_at, data.updated_at]
+          [data.id, data.name, data.description, data.git_repo_url, data.git_branch, defaultUserId, data.created_at, data.updated_at]
         );
         break; // Нашли нужный проект, выходим из цикла
       }
@@ -312,11 +317,11 @@ async function importJsonProject(query: any, projectId: string, repoPath: string
       if (res.rows.length === 0) {
         // Вставляем новый раздел
               await query(
-        `INSERT INTO test_case_sections (id, project_id, name, parent_id, is_deleted, deleted_at, created_at, updated_at)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+        `INSERT INTO test_case_sections (id, project_id, name, parent_id, created_by, is_deleted, deleted_at, created_at, updated_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
          ON CONFLICT (id) DO UPDATE SET
-           project_id=$2, name=$3, parent_id=$4, is_deleted=$5, deleted_at=$6, created_at=$7, updated_at=$8`,
-        [data.id, actualProjectId, data.name, data.parent_id, data.is_deleted || false, data.deleted_at, data.created_at, data.updated_at]
+           project_id=$2, name=$3, parent_id=$4, created_by=$5, is_deleted=$6, deleted_at=$7, created_at=$8, updated_at=$9`,
+        [data.id, actualProjectId, data.name, data.parent_id, defaultUserId, data.is_deleted || false, data.deleted_at, data.created_at, data.updated_at]
       );
       } else {
         // Уже есть раздел с таким id, используем существующий id
@@ -338,7 +343,7 @@ async function importJsonProject(query: any, projectId: string, repoPath: string
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
          ON CONFLICT (id) DO UPDATE SET
            project_id=$2, name=$3, description=$4, status=$5, created_by=$6, is_deleted=$7, deleted_at=$8, created_at=$9, updated_at=$10`,
-        [data.id, data.project_id, data.name, data.description, data.status, data.created_by, data.is_deleted || false, data.deleted_at, data.created_at, data.updated_at]
+        [data.id, data.project_id, data.name, data.description, data.status, defaultUserId, data.is_deleted || false, data.deleted_at, data.created_at, data.updated_at]
       );
     }
     console.log(`[Git Import] Импортировано ${planFiles.length} тест-планов для проекта ${actualProjectId}`);
@@ -394,7 +399,7 @@ async function importJsonProject(query: any, projectId: string, repoPath: string
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
          ON CONFLICT (id) DO UPDATE SET
            project_id=$2, test_plan_id=$3, title=$4, description=$5, preconditions=$6, steps=$7, expected_result=$8, priority=$9, status=$10, created_by=$11, assigned_to=$12, section_id=$13, is_deleted=$14, deleted_at=$15, created_at=$16, updated_at=$17`,
-        [data.id, data.project_id, testPlanId, data.title, data.description, data.preconditions, data.steps, data.expected_result, data.priority, data.status, data.created_by, data.assigned_to, sectionId, data.is_deleted || false, data.deleted_at, data.created_at, data.updated_at]
+        [data.id, data.project_id, testPlanId, data.title, data.description, data.preconditions, data.steps, data.expected_result, data.priority, data.status, defaultUserId, defaultUserId, sectionId, data.is_deleted || false, data.deleted_at, data.created_at, data.updated_at]
       );
       importedCount++;
     }
@@ -407,11 +412,11 @@ async function importJsonProject(query: any, projectId: string, repoPath: string
     for (const file of runFiles) {
       const data = JSON.parse(fs.readFileSync(path.join(runDir, file), 'utf8'));
       await query(
-        `INSERT INTO test_runs (id, test_plan_id, name, description, status, started_by, is_deleted, deleted_at, created_at)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+        `INSERT INTO test_runs (id, test_plan_id, name, description, status, started_by, created_by, is_deleted, deleted_at, created_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
          ON CONFLICT (id) DO UPDATE SET
-           test_plan_id=$2, name=$3, description=$4, status=$5, started_by=$6, is_deleted=$7, deleted_at=$8, created_at=$9`,
-        [data.id, data.test_plan_id, data.name, data.description, data.status, data.started_by, data.is_deleted || false, data.deleted_at, data.created_at]
+           test_plan_id=$2, name=$3, description=$4, status=$5, started_by=$6, created_by=$7, is_deleted=$8, deleted_at=$9, created_at=$10`,
+        [data.id, data.test_plan_id, data.name, data.description, data.status, defaultUserId, defaultUserId, data.is_deleted || false, data.deleted_at, data.created_at]
       );
     }
   }

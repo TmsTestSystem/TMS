@@ -94,6 +94,10 @@ router.post('/upload', upload.single('file'), async (req: Request, res: Response
       return res.status(400).json({ error: 'ID тест-кейса обязателен' });
     }
 
+    // Получаем ID существующего пользователя (admin)
+    const userResult = await query('SELECT id FROM users WHERE username = $1', ['admin']);
+    const defaultUserId = userResult.rows[0]?.id || '550e8400-e29b-41d4-a716-446655440000';
+
     // Сохраняем информацию о файле в базе данных
     const result = await query(`
       INSERT INTO attachments (
@@ -109,7 +113,7 @@ router.post('/upload', upload.single('file'), async (req: Request, res: Response
       req.file.size,
       req.file.mimetype,
       description || null,
-      '00000000-0000-0000-0000-000000000001' // admin user
+      defaultUserId
     ]);
 
     return res.status(201).json(result.rows[0]);

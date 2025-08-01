@@ -9,7 +9,6 @@ services:
     command: ["postgres", "-p", "55432"]
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
       - ./db_init:/docker-entrypoint-initdb.d
     ports:
       - "55432:55432"
