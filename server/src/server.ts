@@ -14,6 +14,7 @@ import testRunRoutes from './routes/testRuns';
 import checklistRoutes from './routes/checklists';
 import gitRoutes from './routes/git';
 import testCaseSectionRoutes from './routes/testCaseSections';
+import attachmentRoutes from './routes/attachments';
 import dbRoutes from './routes/db';
 
 dotenv.config();
@@ -53,6 +54,7 @@ app.use('/api/test-runs', testRunRoutes);
 app.use('/api/checklists', checklistRoutes);
 app.use('/api/git', gitRoutes);
 app.use('/api/test-case-sections', testCaseSectionRoutes);
+app.use('/api/attachments', attachmentRoutes);
 app.use('/api/db', dbRoutes);
 
 // Health check

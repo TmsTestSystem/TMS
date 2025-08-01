@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import AttachmentUploader from './AttachmentUploader.js';
 
 interface TestCaseSection {
   id: string;
@@ -38,9 +39,15 @@ const CreateTestCaseModal: React.FC<CreateTestCaseModalProps> = ({
     sectionId: sectionId ?? null // uuid (string) or null
   });
 
+  // Состояние для вложений
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [fileDescriptions, setFileDescriptions] = useState<Record<string, string>>({});
+
   const [sections, setSections] = useState<TestCaseSection[]>([]);
   const [loadingSections, setLoadingSections] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [createdTestCaseId, setCreatedTestCaseId] = useState<string | null>(null);
+  const [showAttachments, setShowAttachments] = useState(false);
 
   // Загрузка разделов проекта
   useEffect(() => {
@@ -97,20 +104,142 @@ const CreateTestCaseModal: React.FC<CreateTestCaseModalProps> = ({
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.title.trim() || !formData.steps.trim() || !formData.expectedResult.trim()) {
       setError('Заполните все обязательные поля');
       return;
     }
+    
     const payload = {
       ...formData,
       projectId,
       sectionId: formData.sectionId,
       testPlanId: testPlanId || undefined
     };
-    onSave(payload);
+    
+    try {
+      // Создаем тест-кейс
+      const response = await fetch('/api/test-cases', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (response.ok) {
+        const newTestCase = await response.json();
+        
+        // Загружаем вложения, если они есть
+        if (selectedFiles.length > 0) {
+          try {
+            await uploadAttachments(newTestCase.id);
+          } catch (uploadError) {
+            console.error('Ошибка загрузки вложений:', uploadError);
+            // Не прерываем создание тест-кейса, если вложения не загрузились
+          }
+        }
+        
+        setCreatedTestCaseId(newTestCase.id);
+        setShowAttachments(true);
+        onSave(newTestCase);
+      } else {
+        const error = await response.json();
+        setError(error.error || 'Ошибка создания тест-кейса');
+      }
+    } catch (error) {
+      console.error('Ошибка создания тест-кейса:', error);
+      setError('Ошибка создания тест-кейса');
+    }
+  };
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    setSelectedFiles(prev => [...prev, ...files]);
+    
+    // Инициализируем описания для новых файлов
+    const newDescriptions: Record<string, string> = {};
+    files.forEach(file => {
+      newDescriptions[file.name] = '';
+    });
+    setFileDescriptions(prev => ({ ...prev, ...newDescriptions }));
+  };
+
+  const handleRemoveFile = (fileName) => {
+    setSelectedFiles(prev => prev.filter(file => file.name !== fileName));
+    setFileDescriptions(prev => {
+      const newDescriptions = { ...prev };
+      delete newDescriptions[fileName];
+      return newDescriptions;
+    });
+  };
+
+  const handleDescriptionChange = (fileName, description) => {
+    setFileDescriptions(prev => ({
+      ...prev,
+      [fileName]: description
+    }));
+  };
+
+  const formatFileSize = (bytes) => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
+
+  const getFileIcon = (mimeType) => {
+    if (mimeType.startsWith('image/')) return '🖼️';
+    if (mimeType.startsWith('video/')) return '🎥';
+    if (mimeType.startsWith('audio/')) return '🎵';
+    if (mimeType.includes('pdf')) return '📄';
+    if (mimeType.includes('word') || mimeType.includes('document')) return '📝';
+    if (mimeType.includes('excel') || mimeType.includes('spreadsheet')) return '📊';
+    if (mimeType.includes('zip') || mimeType.includes('rar')) return '📦';
+    return '📎';
+  };
+
+  const uploadAttachments = async (testCaseId) => {
+    const uploadPromises = selectedFiles.map(async (file) => {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('testCaseId', testCaseId);
+      
+      const description = fileDescriptions[file.name];
+      if (description && description.trim()) {
+        formData.append('description', description.trim());
+      }
+
+      const response = await fetch('/api/attachments/upload', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (response.ok) {
+        return await response.json();
+      } else {
+        throw new Error(`Ошибка загрузки файла ${file.name}`);
+      }
+    });
+
+    try {
+      await Promise.all(uploadPromises);
+      console.log('Все вложения успешно загружены');
+    } catch (error) {
+      console.error('Ошибка загрузки вложений:', error);
+      throw error;
+    }
+  };
+
+  const handleClose = () => {
     setFormData({ title: '', description: '', preconditions: '', steps: '', expectedResult: '', priority: 'medium', status: 'draft', sectionId: sectionId ?? null });
+    setCreatedTestCaseId(null);
+    setShowAttachments(false);
+    setError(null);
+    setSelectedFiles([]);
+    setFileDescriptions({});
     onClose();
   };
 
@@ -119,9 +248,52 @@ const CreateTestCaseModal: React.FC<CreateTestCaseModalProps> = ({
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
       <div className="bg-white rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-        <h2 className="text-xl font-bold mb-4">Создать тест-кейс</h2>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-xl font-bold">
+            {showAttachments ? 'Добавить вложения' : 'Создать тест-кейс'}
+          </h2>
+          <button
+            onClick={handleClose}
+            className="text-gray-400 hover:text-gray-600"
+          >
+            ✕
+          </button>
+        </div>
         
-        <form id="create-testcase-form" onSubmit={handleSubmit}>
+        {showAttachments ? (
+          <div>
+            <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-md">
+              <p className="text-green-800">
+                ✅ Тест-кейс "{formData.title}" успешно создан!
+              </p>
+              <p className="text-sm text-green-600 mt-1">
+                Теперь вы можете добавить вложения (скриншоты, документы и т.д.)
+              </p>
+            </div>
+            
+                         {createdTestCaseId && (
+               <AttachmentUploader
+                 testCaseId={createdTestCaseId}
+                 onAttachmentUploaded={(attachment) => {
+                   console.log('Вложение загружено:', attachment);
+                 }}
+                 onAttachmentDeleted={(attachmentId) => {
+                   console.log('Вложение удалено:', attachmentId);
+                 }}
+               />
+             )}
+            
+            <div className="flex justify-end mt-6">
+              <button
+                onClick={handleClose}
+                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+              >
+                Завершить
+              </button>
+            </div>
+          </div>
+        ) : (
+          <form id="create-testcase-form" onSubmit={handleSubmit}>
           {error && (
             <div className="mb-4 text-red-600 text-sm font-medium">{error}</div>
           )}
@@ -244,22 +416,74 @@ const CreateTestCaseModal: React.FC<CreateTestCaseModalProps> = ({
             </div>
           </div>
 
-          <div className="flex justify-end space-x-3">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 text-gray-600 border border-gray-300 rounded-md hover:bg-gray-50"
-            >
-              Отмена
-            </button>
-            <button
-              type="submit"
-              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-            >
-              Создать
-            </button>
-          </div>
+                     {/* Секция вложений */}
+           <div className="mb-6">
+             <label className="block text-sm font-medium text-gray-700 mb-2">
+               Вложения
+             </label>
+             
+             {/* Кнопка добавления файлов */}
+             <label className="flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors cursor-pointer w-fit">
+               <input
+                 type="file"
+                 onChange={handleFileSelect}
+                 className="hidden"
+                 accept="*/*"
+                 multiple
+               />
+               📎 Добавить файлы
+             </label>
+             
+             {/* Список выбранных файлов */}
+             {selectedFiles.length > 0 && (
+               <div className="mt-3 space-y-2">
+                 <p className="text-sm text-gray-600">Выбранные файлы:</p>
+                 {selectedFiles.map((file, index) => (
+                   <div key={index} className="flex items-center gap-3 p-2 bg-gray-50 border border-gray-200 rounded-md">
+                     <span className="text-lg">{getFileIcon(file.type)}</span>
+                     <div className="flex-1 min-w-0">
+                       <p className="font-medium text-gray-900 truncate">{file.name}</p>
+                       <p className="text-sm text-gray-500">{formatFileSize(file.size)}</p>
+                     </div>
+                     <div className="flex gap-2">
+                       <input
+                         type="text"
+                         placeholder="Описание файла..."
+                         value={fileDescriptions[file.name] || ''}
+                         onChange={(e) => handleDescriptionChange(file.name, e.target.value)}
+                         className="px-2 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500"
+                       />
+                       <button
+                         type="button"
+                         onClick={() => handleRemoveFile(file.name)}
+                         className="px-2 py-1 text-red-600 hover:text-red-700 text-sm"
+                       >
+                         ✕
+                       </button>
+                     </div>
+                   </div>
+                 ))}
+               </div>
+             )}
+           </div>
+
+           <div className="flex justify-end space-x-3">
+             <button
+               type="button"
+               onClick={handleClose}
+               className="px-4 py-2 text-gray-600 border border-gray-300 rounded-md hover:bg-gray-50"
+             >
+               Отмена
+             </button>
+             <button
+               type="submit"
+               className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+             >
+               Создать
+             </button>
+           </div>
         </form>
+        )}
       </div>
     </div>
   );

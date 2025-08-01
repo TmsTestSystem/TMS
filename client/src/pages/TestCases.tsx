@@ -19,6 +19,8 @@ interface TestCase {
   expected_result: string;
   priority: string;
   status: string;
+  is_deleted?: boolean;
+  deleted_at?: string;
   created_at: string;
   updated_at: string;
 }

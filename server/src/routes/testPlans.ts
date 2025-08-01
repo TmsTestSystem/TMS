@@ -13,6 +13,7 @@ router.get('/', async (req: Request, res: Response) => {
       FROM test_plans tp
       LEFT JOIN projects p ON tp.project_id = p.id
       LEFT JOIN users u ON tp.created_by = u.id
+      WHERE tp.is_deleted = FALSE
       ORDER BY tp.created_at DESC
     `);
     return res.json(result.rows);
@@ -32,8 +33,8 @@ router.get('/project/:projectId', async (req: Request, res: Response) => {
         COUNT(tc.id) as test_cases_count
       FROM test_plans tp
       LEFT JOIN users u ON tp.created_by = u.id
-      LEFT JOIN test_cases tc ON tp.id = tc.test_plan_id
-      WHERE tp.project_id = $1
+      LEFT JOIN test_cases tc ON tp.id = tc.test_plan_id AND tc.is_deleted = FALSE
+      WHERE tp.project_id = $1 AND tp.is_deleted = FALSE
       GROUP BY tp.id, u.username
       ORDER BY tp.created_at DESC
     `, [projectId]);
@@ -55,7 +56,7 @@ router.get('/:id', async (req: Request, res: Response) => {
       FROM test_plans tp
       LEFT JOIN projects p ON tp.project_id = p.id
       LEFT JOIN users u ON tp.created_by = u.id
-      WHERE tp.id = $1
+      WHERE tp.id = $1 AND tp.is_deleted = FALSE
     `, [id]);
     
     if (result.rows.length === 0) {
@@ -126,12 +127,12 @@ router.put('/:id', async (req: Request, res: Response) => {
   }
 });
 
-// Удалить тест-план
+// Удалить тест-план (soft delete)
 router.delete('/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const result = await query(
-      'DELETE FROM test_plans WHERE id = $1 RETURNING *',
+      'UPDATE test_plans SET is_deleted = TRUE, deleted_at = NOW() WHERE id = $1 AND is_deleted = FALSE RETURNING *',
       [id]
     );
     
@@ -145,6 +146,25 @@ router.delete('/:id', async (req: Request, res: Response) => {
   }
 });
 
+// Восстановить тест-план (restore)
+router.post('/:id/restore', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const result = await query(
+      'UPDATE test_plans SET is_deleted = FALSE, deleted_at = NULL WHERE id = $1 AND is_deleted = TRUE RETURNING *',
+      [id]
+    );
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Тест-план не найден или уже восстановлен' });
+    }
+    
+    return res.json({ message: 'Тест-план успешно восстановлен', testPlan: result.rows[0] });
+  } catch (error) {
+    return res.status(500).json({ error: 'Ошибка восстановления тест-плана' });
+  }
+});
+
 // Получить тест-кейсы тест-плана
 router.get('/:id/test-cases', async (req: Request, res: Response) => {
   try {
@@ -155,7 +175,7 @@ router.get('/:id/test-cases', async (req: Request, res: Response) => {
         u.username as assigned_to_name
       FROM test_cases tc
       LEFT JOIN users u ON tc.assigned_to = u.id
-      WHERE tc.test_plan_id = $1
+      WHERE tc.test_plan_id = $1 AND tc.is_deleted = FALSE
       ORDER BY tc.id DESC
     `, [id]);
     

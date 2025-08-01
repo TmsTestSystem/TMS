@@ -2,6 +2,7 @@ import express, { Request, Response } from 'express';
 import { simpleGit, SimpleGit } from 'simple-git';
 import path from 'path';
 import fs from 'fs';
+import { query } from '../config/database';
 
 const router = express.Router();
 
@@ -181,7 +182,6 @@ async function importJsonDirect(query: any) {
 
 // Вспомогательная функция для получения git-репозитория и папки проекта
 async function getProjectRepoInfo(projectId: string) {
-  const { query } = require('../config/database');
   const result = await query('SELECT * FROM projects WHERE id = $1', [projectId]);
   if (!result.rows.length) throw new Error('Проект не найден');
   const project = result.rows[0];
@@ -219,7 +219,7 @@ async function exportJsonProject(query: any, projectId: string, repoPath: string
     }
   }
 
-  // 2. Экспортируем локальные тест-кейсы
+  // 2. Экспортируем локальные тест-кейсы (включая удаленные для синхронизации)
   const cases = await query('SELECT * FROM test_cases WHERE project_id = $1', [projectId]);
   for (const c of cases.rows) {
     let caseData = { ...c };
@@ -229,8 +229,7 @@ async function exportJsonProject(query: any, projectId: string, repoPath: string
       JSON.stringify(caseData, null, 2)
     );
   }
-  // Аналогично можно реализовать для test_plans и test_runs (по необходимости)
-  // Экспорт тест-планов
+  // Экспорт тест-планов (включая удаленные)
   const plans = await query('SELECT * FROM test_plans WHERE project_id = $1', [projectId]);
   for (const p of plans.rows) {
     fs.writeFileSync(
@@ -238,7 +237,7 @@ async function exportJsonProject(query: any, projectId: string, repoPath: string
       JSON.stringify(p, null, 2)
     );
   }
-  // Экспорт тестовых прогонов
+  // Экспорт тестовых прогонов (включая удаленные)
   const runs = await query('SELECT * FROM test_runs WHERE test_plan_id IN (SELECT id FROM test_plans WHERE project_id = $1)', [projectId]);
   for (const r of runs.rows) {
     fs.writeFileSync(
@@ -246,7 +245,7 @@ async function exportJsonProject(query: any, projectId: string, repoPath: string
       JSON.stringify(r, null, 2)
     );
   }
-  // Экспорт разделов (test_case_sections)
+  // Экспорт разделов (test_case_sections) (включая удаленные)
   if (!fs.existsSync(path.join(repoPath, 'test_case_sections'))) fs.mkdirSync(path.join(repoPath, 'test_case_sections'), { recursive: true });
   const sections = await query('SELECT * FROM test_case_sections WHERE project_id = $1', [projectId]);
   for (const s of sections.rows) {
@@ -312,13 +311,13 @@ async function importJsonProject(query: any, projectId: string, repoPath: string
       let newId = data.id;
       if (res.rows.length === 0) {
         // Вставляем новый раздел
-        await query(
-          `INSERT INTO test_case_sections (id, project_id, name, parent_id, created_at, updated_at)
-           VALUES ($1,$2,$3,$4,$5,$6)
-           ON CONFLICT (id) DO UPDATE SET
-             project_id=$2, name=$3, parent_id=$4, created_at=$5, updated_at=$6`,
-          [data.id, actualProjectId, data.name, data.parent_id, data.created_at, data.updated_at]
-        );
+              await query(
+        `INSERT INTO test_case_sections (id, project_id, name, parent_id, is_deleted, deleted_at, created_at, updated_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+         ON CONFLICT (id) DO UPDATE SET
+           project_id=$2, name=$3, parent_id=$4, is_deleted=$5, deleted_at=$6, created_at=$7, updated_at=$8`,
+        [data.id, actualProjectId, data.name, data.parent_id, data.is_deleted || false, data.deleted_at, data.created_at, data.updated_at]
+      );
       } else {
         // Уже есть раздел с таким id, используем существующий id
         newId = res.rows[0].id;
@@ -335,11 +334,11 @@ async function importJsonProject(query: any, projectId: string, repoPath: string
       const data = JSON.parse(fs.readFileSync(path.join(planDir, file), 'utf8'));
       data.project_id = actualProjectId;
       await query(
-        `INSERT INTO test_plans (id, project_id, name, description, status, created_by, created_at, updated_at)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+        `INSERT INTO test_plans (id, project_id, name, description, status, created_by, is_deleted, deleted_at, created_at, updated_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
          ON CONFLICT (id) DO UPDATE SET
-           project_id=$2, name=$3, description=$4, status=$5, created_by=$6, created_at=$7, updated_at=$8`,
-        [data.id, data.project_id, data.name, data.description, data.status, data.created_by, data.created_at, data.updated_at]
+           project_id=$2, name=$3, description=$4, status=$5, created_by=$6, is_deleted=$7, deleted_at=$8, created_at=$9, updated_at=$10`,
+        [data.id, data.project_id, data.name, data.description, data.status, data.created_by, data.is_deleted || false, data.deleted_at, data.created_at, data.updated_at]
       );
     }
     console.log(`[Git Import] Импортировано ${planFiles.length} тест-планов для проекта ${actualProjectId}`);
@@ -391,11 +390,11 @@ async function importJsonProject(query: any, projectId: string, repoPath: string
         sectionId = null;
       }
       await query(
-        `INSERT INTO test_cases (id, project_id, test_plan_id, title, description, preconditions, steps, expected_result, priority, status, created_by, assigned_to, section_id, created_at, updated_at)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+        `INSERT INTO test_cases (id, project_id, test_plan_id, title, description, preconditions, steps, expected_result, priority, status, created_by, assigned_to, section_id, is_deleted, deleted_at, created_at, updated_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
          ON CONFLICT (id) DO UPDATE SET
-           project_id=$2, test_plan_id=$3, title=$4, description=$5, preconditions=$6, steps=$7, expected_result=$8, priority=$9, status=$10, created_by=$11, assigned_to=$12, section_id=$13, created_at=$14, updated_at=$15`,
-        [data.id, data.project_id, testPlanId, data.title, data.description, data.preconditions, data.steps, data.expected_result, data.priority, data.status, data.created_by, data.assigned_to, sectionId, data.created_at, data.updated_at]
+           project_id=$2, test_plan_id=$3, title=$4, description=$5, preconditions=$6, steps=$7, expected_result=$8, priority=$9, status=$10, created_by=$11, assigned_to=$12, section_id=$13, is_deleted=$14, deleted_at=$15, created_at=$16, updated_at=$17`,
+        [data.id, data.project_id, testPlanId, data.title, data.description, data.preconditions, data.steps, data.expected_result, data.priority, data.status, data.created_by, data.assigned_to, sectionId, data.is_deleted || false, data.deleted_at, data.created_at, data.updated_at]
       );
       importedCount++;
     }
@@ -408,11 +407,11 @@ async function importJsonProject(query: any, projectId: string, repoPath: string
     for (const file of runFiles) {
       const data = JSON.parse(fs.readFileSync(path.join(runDir, file), 'utf8'));
       await query(
-        `INSERT INTO test_runs (id, test_plan_id, name, description, status, started_by, created_at)
-         VALUES ($1,$2,$3,$4,$5,$6,$7)
+        `INSERT INTO test_runs (id, test_plan_id, name, description, status, started_by, is_deleted, deleted_at, created_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
          ON CONFLICT (id) DO UPDATE SET
-           test_plan_id=$2, name=$3, description=$4, status=$5, started_by=$6, created_at=$7`,
-        [data.id, data.test_plan_id, data.name, data.description, data.status, data.started_by, data.created_at]
+           test_plan_id=$2, name=$3, description=$4, status=$5, started_by=$6, is_deleted=$7, deleted_at=$8, created_at=$9`,
+        [data.id, data.test_plan_id, data.name, data.description, data.status, data.started_by, data.is_deleted || false, data.deleted_at, data.created_at]
       );
     }
   }
@@ -422,7 +421,6 @@ async function importJsonProject(query: any, projectId: string, repoPath: string
 // /export-json и /import-json теперь используют эти функции
 router.post('/export-json', async (req, res) => {
   try {
-    const { query } = require('../config/database');
     await exportJsonDirect(query);
     res.json({ success: true, message: 'Экспорт завершён' });
   } catch (error) {
@@ -432,7 +430,6 @@ router.post('/export-json', async (req, res) => {
 
 router.post('/import-json', async (req, res) => {
   try {
-    const { query } = require('../config/database');
     await importJsonDirect(query);
     res.json({ success: true, message: 'Импорт завершён' });
   } catch (error) {
@@ -473,24 +470,34 @@ router.post('/pull', async (req, res) => {
     }
     git = simpleGit(repoPath);
     await git.pull();
-    const { query } = require('../config/database');
     await importJsonProject(query, projectId, repoPath);
-    res.json({ success: true, message: 'Git pull + импорт завершён' });
+    res.json({ success: true, message: 'Данные успешно импортированы из Git' });
   } catch (error) {
-    res.status(500).json({ success: false, error: (error as Error).message });
+    const err = error as Error;
+    let errorMessage = 'Ошибка импорта из Git';
+    if (err.message.includes('ENOTFOUND')) {
+      errorMessage = 'Не удается подключиться к репозиторию. Проверьте URL.';
+    } else if (err.message.includes('not found')) {
+      errorMessage = 'Репозиторий не найден. Проверьте URL.';
+    } else if (err.message.includes('authentication')) {
+      errorMessage = 'Ошибка аутентификации. Проверьте Git токен.';
+    }
+    res.status(500).json({ success: false, error: errorMessage });
   }
 });
 
 router.post('/push', async (req, res) => {
+  console.log('Git push request received:', req.query);
   try {
     const projectId = req.query.projectId as string;
     if (!projectId) {
+      console.log('No projectId provided');
       res.status(400).json({ success: false, error: 'projectId обязателен' });
       return;
     }
+    console.log('Processing push for projectId:', projectId);
     let { repoPath, gitRepoUrl } = await getProjectRepoInfo(projectId);
     gitRepoUrl = withGitToken(gitRepoUrl);
-    const { query } = require('../config/database');
     await exportJsonProject(query, projectId, repoPath);
     let git: SimpleGit;
     if (!fs.existsSync(path.join(repoPath, '.git'))) {
@@ -522,7 +529,14 @@ router.post('/push', async (req, res) => {
       await git.pull('origin', 'main', {'--rebase': null});
     } catch (pullErr) {
       const err = pullErr as Error;
-      res.status(409).json({ success: false, error: 'Конфликт при pull: ' + (err.message || err) });
+      // Ограничиваем сообщение об ошибке
+      let errorMessage = 'Конфликт при синхронизации с удаленным репозиторием';
+      if (err.message.includes('CONFLICT')) {
+        errorMessage = 'Обнаружены конфликты в файлах. Очистите локальный репозиторий и попробуйте снова.';
+      } else if (err.message.includes('could not apply')) {
+        errorMessage = 'Ошибка применения изменений. Попробуйте очистить репозиторий.';
+      }
+      res.status(409).json({ success: false, error: errorMessage });
       return;
     }
     try {
@@ -533,13 +547,26 @@ router.post('/push', async (req, res) => {
         await git.push(['--set-upstream', 'origin', 'main']);
       } catch (pushErr) {
         const err = pushErr as Error;
-        res.status(500).json({ success: false, error: 'Ошибка push: ' + (err.message || err) });
+        let errorMessage = 'Ошибка отправки изменений в репозиторий';
+        if (err.message.includes('authentication')) {
+          errorMessage = 'Ошибка аутентификации. Проверьте Git токен.';
+        } else if (err.message.includes('permission')) {
+          errorMessage = 'Нет прав для записи в репозиторий.';
+        }
+        res.status(500).json({ success: false, error: errorMessage });
         return;
       }
     }
-    res.json({ success: true, message: 'Git pull --rebase + push + экспорт завершён' });
+    res.json({ success: true, message: 'Данные успешно экспортированы в Git' });
   } catch (error) {
-    res.status(500).json({ success: false, error: (error as Error).message });
+    const err = error as Error;
+    let errorMessage = 'Ошибка экспорта в Git';
+    if (err.message.includes('ENOTFOUND')) {
+      errorMessage = 'Не удается подключиться к репозиторию. Проверьте URL.';
+    } else if (err.message.includes('not found')) {
+      errorMessage = 'Репозиторий не найден. Проверьте URL.';
+    }
+    res.status(500).json({ success: false, error: errorMessage });
   }
 });
 

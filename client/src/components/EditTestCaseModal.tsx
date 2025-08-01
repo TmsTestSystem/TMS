@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 
 interface TestCaseSection {
-  id: number;
-  project_id: number;
-  parent_id: number | null;
+  id: string;
+  project_id: string;
+  parent_id: string | null;
   name: string;
   order_index: number;
   created_at: string;
@@ -50,6 +50,10 @@ const EditTestCaseModal: React.FC<EditTestCaseModalProps> = ({
   const [sections, setSections] = useState<TestCaseSection[]>([]);
   const [loadingSections, setLoadingSections] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  
+  // Состояние для вложений
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [fileDescriptions, setFileDescriptions] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (testCase) {
@@ -99,7 +103,86 @@ const EditTestCaseModal: React.FC<EditTestCaseModalProps> = ({
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    setSelectedFiles(prev => [...prev, ...files]);
+    
+    // Инициализируем описания для новых файлов
+    const newDescriptions: Record<string, string> = {};
+    files.forEach(file => {
+      newDescriptions[file.name] = '';
+    });
+    setFileDescriptions(prev => ({ ...prev, ...newDescriptions }));
+  };
+
+  const handleRemoveFile = (fileName: string) => {
+    setSelectedFiles(prev => prev.filter(file => file.name !== fileName));
+    setFileDescriptions(prev => {
+      const newDescriptions = { ...prev };
+      delete newDescriptions[fileName];
+      return newDescriptions;
+    });
+  };
+
+  const handleDescriptionChange = (fileName: string, description: string) => {
+    setFileDescriptions(prev => ({
+      ...prev,
+      [fileName]: description
+    }));
+  };
+
+  const formatFileSize = (bytes: number) => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
+
+  const getFileIcon = (mimeType: string) => {
+    if (mimeType.startsWith('image/')) return '🖼️';
+    if (mimeType.startsWith('video/')) return '🎥';
+    if (mimeType.startsWith('audio/')) return '🎵';
+    if (mimeType.includes('pdf')) return '📄';
+    if (mimeType.includes('word') || mimeType.includes('document')) return '📝';
+    if (mimeType.includes('excel') || mimeType.includes('spreadsheet')) return '📊';
+    if (mimeType.includes('zip') || mimeType.includes('rar')) return '📦';
+    return '📎';
+  };
+
+  const uploadAttachments = async (testCaseId: string) => {
+    const uploadPromises = selectedFiles.map(async (file) => {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('testCaseId', testCaseId);
+      
+      const description = fileDescriptions[file.name];
+      if (description && description.trim()) {
+        formData.append('description', description.trim());
+      }
+
+      const response = await fetch('/api/attachments/upload', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (response.ok) {
+        return await response.json();
+      } else {
+        throw new Error(`Ошибка загрузки файла ${file.name}`);
+      }
+    });
+
+    try {
+      await Promise.all(uploadPromises);
+      console.log('Все вложения успешно загружены');
+    } catch (error) {
+      console.error('Ошибка загрузки вложений:', error);
+      throw error;
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.title.trim() || !formData.steps.trim() || !formData.expectedResult.trim()) {
       setError('Поля "Заголовок", "Шаги выполнения" и "Ожидаемый результат" обязательны для заполнения.');
@@ -107,12 +190,25 @@ const EditTestCaseModal: React.FC<EditTestCaseModalProps> = ({
     }
     setError(null);
     if (!testCase) return;
+    
+    // Сохраняем тест-кейс
     onSave({
       ...testCase,
       ...formData,
       expected_result: formData.expectedResult,
       section_id: formData.sectionId,
     });
+    
+    // Загружаем вложения, если они есть
+    if (selectedFiles.length > 0) {
+      try {
+        await uploadAttachments(testCase.id);
+      } catch (uploadError) {
+        console.error('Ошибка загрузки вложений:', uploadError);
+        // Не прерываем сохранение тест-кейса, если вложения не загрузились
+      }
+    }
+    
     onClose();
   };
 
@@ -219,6 +315,57 @@ const EditTestCaseModal: React.FC<EditTestCaseModalProps> = ({
               </select>
             </div>
           </div>
+          {/* Секция вложений */}
+          <div className="mb-6">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Добавить вложения
+            </label>
+            
+            {/* Кнопка добавления файлов */}
+            <label className="flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors cursor-pointer w-fit">
+              <input
+                type="file"
+                onChange={handleFileSelect}
+                className="hidden"
+                accept="*/*"
+                multiple
+              />
+              📎 Добавить файлы
+            </label>
+            
+            {/* Список выбранных файлов */}
+            {selectedFiles.length > 0 && (
+              <div className="mt-3 space-y-2">
+                <p className="text-sm text-gray-600">Новые файлы для загрузки:</p>
+                {selectedFiles.map((file, index) => (
+                  <div key={index} className="flex items-center gap-3 p-2 bg-gray-50 border border-gray-200 rounded-md">
+                    <span className="text-lg">{getFileIcon(file.type)}</span>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-gray-900 truncate">{file.name}</p>
+                      <p className="text-sm text-gray-500">{formatFileSize(file.size)}</p>
+                    </div>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        placeholder="Описание файла..."
+                        value={fileDescriptions[file.name] || ''}
+                        onChange={(e) => handleDescriptionChange(file.name, e.target.value)}
+                        className="px-2 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveFile(file.name)}
+                        className="px-2 py-1 text-red-600 hover:text-red-700 text-sm"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
           <div className="flex justify-end space-x-3">
             <button
               type="button"

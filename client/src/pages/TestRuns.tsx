@@ -6,7 +6,7 @@ import { toast } from 'react-toastify';
 import { FileText } from 'lucide-react';
 
 interface TestRun {
-  id: number;
+  id: string;
   name: string;
   description?: string;
   status: string;
@@ -18,6 +18,8 @@ interface TestRun {
   failed_count: number;
   blocked_count: number;
   not_run_count: number;
+  is_deleted?: boolean;
+  deleted_at?: string;
   created_at: string;
   started_at?: string;
   completed_at?: string;
@@ -29,7 +31,7 @@ const TestRuns: React.FC = () => {
   const [testRuns, setTestRuns] = useState<TestRun[]>([]);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isResultsModalOpen, setIsResultsModalOpen] = useState(false);
-  const [selectedTestRunId, setSelectedTestRunId] = useState<number | null>(null);
+  const [selectedTestRunId, setSelectedTestRunId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
@@ -57,7 +59,7 @@ const TestRuns: React.FC = () => {
     }, 100);
   };
 
-  const handleDeleteTestRun = async (id: number) => {
+  const handleDeleteTestRun = async (id: string) => {
     if (!window.confirm('Вы уверены, что хотите удалить этот тестовый прогон?')) {
       return;
     }
@@ -79,7 +81,7 @@ const TestRuns: React.FC = () => {
     }
   };
 
-  const handleStartTestRun = async (id: number) => {
+  const handleStartTestRun = async (id: string) => {
     try {
       const response = await fetch(`/api/test-runs/${id}/start`, {
         method: 'POST',
@@ -100,7 +102,7 @@ const TestRuns: React.FC = () => {
     }
   };
 
-  const handleCompleteTestRun = async (id: number) => {
+  const handleCompleteTestRun = async (id: string) => {
     try {
       const response = await fetch(`/api/test-runs/${id}/complete`, {
         method: 'POST',
@@ -158,7 +160,7 @@ const TestRuns: React.FC = () => {
     return Math.min(percent, 100);
   };
 
-  const handleViewResults = (testRunId: number) => {
+  const handleViewResults = (testRunId: string) => {
     setSelectedTestRunId(testRunId);
     setIsResultsModalOpen(true);
   };
@@ -298,7 +300,7 @@ const TestRuns: React.FC = () => {
       <TestRunResults
         isOpen={isResultsModalOpen}
         onClose={handleCloseResults}
-        testRunId={selectedTestRunId || 0}
+        testRunId={selectedTestRunId || ''}
       />
     </div>
   );

@@ -37,6 +37,8 @@ CREATE TABLE test_plans (
     description TEXT,
     status VARCHAR(20) DEFAULT 'draft',
     created_by UUID REFERENCES users(id),
+    is_deleted BOOLEAN DEFAULT FALSE,
+    deleted_at TIMESTAMP,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -48,6 +50,8 @@ CREATE TABLE test_case_sections (
     parent_id UUID REFERENCES test_case_sections(id) ON DELETE CASCADE,
     name VARCHAR(100) NOT NULL,
     order_index INTEGER DEFAULT 0,
+    is_deleted BOOLEAN DEFAULT FALSE,
+    deleted_at TIMESTAMP,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -67,6 +71,8 @@ CREATE TABLE test_cases (
     created_by UUID REFERENCES users(id),
     assigned_to UUID REFERENCES users(id),
     section_id UUID REFERENCES test_case_sections(id) ON DELETE SET NULL,
+    is_deleted BOOLEAN DEFAULT FALSE,
+    deleted_at TIMESTAMP,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -104,6 +110,8 @@ CREATE TABLE test_runs (
     started_by UUID REFERENCES users(id),
     started_at TIMESTAMP,
     completed_at TIMESTAMP,
+    is_deleted BOOLEAN DEFAULT FALSE,
+    deleted_at TIMESTAMP,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -161,6 +169,12 @@ CREATE INDEX idx_test_cases_test_plan_id ON test_cases(test_plan_id);
 CREATE INDEX idx_test_results_test_run_id ON test_results(test_run_id);
 CREATE INDEX idx_test_results_test_case_id ON test_results(test_case_id);
 CREATE INDEX idx_comments_entity ON comments(entity_type, entity_id);
+
+-- Индексы для soft delete
+CREATE INDEX idx_test_cases_is_deleted ON test_cases(is_deleted);
+CREATE INDEX idx_test_plans_is_deleted ON test_plans(is_deleted);
+CREATE INDEX idx_test_runs_is_deleted ON test_runs(is_deleted);
+CREATE INDEX idx_test_case_sections_is_deleted ON test_case_sections(is_deleted);
 
 -- Вставка начальных данных
 INSERT INTO users (id, username, email, password_hash, first_name, last_name, role) VALUES

@@ -236,10 +236,10 @@ async function importJsonProject(query, projectId, repoPath) {
             const res = await query('SELECT id FROM test_case_sections WHERE id = $1', [data.id]);
             let newId = data.id;
             if (res.rows.length === 0) {
-                await query(`INSERT INTO test_case_sections (id, project_id, name, parent_id, created_at, updated_at)
-           VALUES ($1,$2,$3,$4,$5,$6)
-           ON CONFLICT (id) DO UPDATE SET
-             project_id=$2, name=$3, parent_id=$4, created_at=$5, updated_at=$6`, [data.id, actualProjectId, data.name, data.parent_id, data.created_at, data.updated_at]);
+                await query(`INSERT INTO test_case_sections (id, project_id, name, parent_id, is_deleted, deleted_at, created_at, updated_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+         ON CONFLICT (id) DO UPDATE SET
+           project_id=$2, name=$3, parent_id=$4, is_deleted=$5, deleted_at=$6, created_at=$7, updated_at=$8`, [data.id, actualProjectId, data.name, data.parent_id, data.is_deleted || false, data.deleted_at, data.created_at, data.updated_at]);
             }
             else {
                 newId = res.rows[0].id;
@@ -254,10 +254,10 @@ async function importJsonProject(query, projectId, repoPath) {
         for (const file of planFiles) {
             const data = JSON.parse(fs.readFileSync(path.join(planDir, file), 'utf8'));
             data.project_id = actualProjectId;
-            await query(`INSERT INTO test_plans (id, project_id, name, description, status, created_by, created_at, updated_at)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+            await query(`INSERT INTO test_plans (id, project_id, name, description, status, created_by, is_deleted, deleted_at, created_at, updated_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
          ON CONFLICT (id) DO UPDATE SET
-           project_id=$2, name=$3, description=$4, status=$5, created_by=$6, created_at=$7, updated_at=$8`, [data.id, data.project_id, data.name, data.description, data.status, data.created_by, data.created_at, data.updated_at]);
+           project_id=$2, name=$3, description=$4, status=$5, created_by=$6, is_deleted=$7, deleted_at=$8, created_at=$9, updated_at=$10`, [data.id, data.project_id, data.name, data.description, data.status, data.created_by, data.is_deleted || false, data.deleted_at, data.created_at, data.updated_at]);
         }
         console.log(`[Git Import] Импортировано ${planFiles.length} тест-планов для проекта ${actualProjectId}`);
     }
@@ -300,10 +300,10 @@ async function importJsonProject(query, projectId, repoPath) {
             else if (sectionId) {
                 sectionId = null;
             }
-            await query(`INSERT INTO test_cases (id, project_id, test_plan_id, title, description, preconditions, steps, expected_result, priority, status, created_by, assigned_to, section_id, created_at, updated_at)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+            await query(`INSERT INTO test_cases (id, project_id, test_plan_id, title, description, preconditions, steps, expected_result, priority, status, created_by, assigned_to, section_id, is_deleted, deleted_at, created_at, updated_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
          ON CONFLICT (id) DO UPDATE SET
-           project_id=$2, test_plan_id=$3, title=$4, description=$5, preconditions=$6, steps=$7, expected_result=$8, priority=$9, status=$10, created_by=$11, assigned_to=$12, section_id=$13, created_at=$14, updated_at=$15`, [data.id, data.project_id, testPlanId, data.title, data.description, data.preconditions, data.steps, data.expected_result, data.priority, data.status, data.created_by, data.assigned_to, sectionId, data.created_at, data.updated_at]);
+           project_id=$2, test_plan_id=$3, title=$4, description=$5, preconditions=$6, steps=$7, expected_result=$8, priority=$9, status=$10, created_by=$11, assigned_to=$12, section_id=$13, is_deleted=$14, deleted_at=$15, created_at=$16, updated_at=$17`, [data.id, data.project_id, testPlanId, data.title, data.description, data.preconditions, data.steps, data.expected_result, data.priority, data.status, data.created_by, data.assigned_to, sectionId, data.is_deleted || false, data.deleted_at, data.created_at, data.updated_at]);
             importedCount++;
         }
         console.log(`[Git Import] Импортировано ${importedCount} тест-кейсов для проекта ${actualProjectId}`);
@@ -313,10 +313,10 @@ async function importJsonProject(query, projectId, repoPath) {
         const runFiles = fs.readdirSync(runDir, { encoding: 'utf8' });
         for (const file of runFiles) {
             const data = JSON.parse(fs.readFileSync(path.join(runDir, file), 'utf8'));
-            await query(`INSERT INTO test_runs (id, test_plan_id, name, description, status, started_by, created_at)
-         VALUES ($1,$2,$3,$4,$5,$6,$7)
+            await query(`INSERT INTO test_runs (id, test_plan_id, name, description, status, started_by, is_deleted, deleted_at, created_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
          ON CONFLICT (id) DO UPDATE SET
-           test_plan_id=$2, name=$3, description=$4, status=$5, started_by=$6, created_at=$7`, [data.id, data.test_plan_id, data.name, data.description, data.status, data.started_by, data.created_at]);
+           test_plan_id=$2, name=$3, description=$4, status=$5, started_by=$6, is_deleted=$7, deleted_at=$8, created_at=$9`, [data.id, data.test_plan_id, data.name, data.description, data.status, data.started_by, data.is_deleted || false, data.deleted_at, data.created_at]);
         }
     }
 }

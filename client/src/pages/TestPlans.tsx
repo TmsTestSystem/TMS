@@ -13,6 +13,8 @@ interface TestPlan {
   project_name: string;
   created_by_name: string;
   test_cases_count?: number;
+  is_deleted?: boolean;
+  deleted_at?: string;
   created_at: string;
   updated_at: string;
   canDelete?: boolean; // Added for new functionality

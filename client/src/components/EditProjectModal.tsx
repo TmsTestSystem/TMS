@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 
 interface Project {
-  id: number;
+  id: string;
   name: string;
   description?: string;
   gitRepoUrl?: string;

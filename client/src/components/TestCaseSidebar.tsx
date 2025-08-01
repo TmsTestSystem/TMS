@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { XMarkIcon, PencilIcon, ClockIcon, TagIcon, CheckCircleIcon, ExclamationTriangleIcon, InformationCircleIcon, DocumentTextIcon } from '@heroicons/react/24/outline';
+import AttachmentUploader from './AttachmentUploader.js';
 
 interface TestCase {
   id: string;
@@ -11,6 +12,8 @@ interface TestCase {
   expected_result?: string;
   priority: string;
   status: string;
+  is_deleted?: boolean;
+  deleted_at?: string;
   createdAt?: string;
 }
 
@@ -223,6 +226,19 @@ const TestCaseSidebar: React.FC<TestCaseSidebarProps> = ({ isOpen, onClose, test
             </div>
           </div>
         )}
+
+        {/* Attachments */}
+        <div className="bg-white border rounded-lg p-4 mb-6 shadow-sm">
+          <AttachmentUploader
+            testCaseId={currentTestCase.id}
+            onAttachmentUploaded={(attachment) => {
+              console.log('Вложение загружено:', attachment);
+            }}
+            onAttachmentDeleted={(attachmentId) => {
+              console.log('Вложение удалено:', attachmentId);
+            }}
+          />
+        </div>
       </div>
     </div>
   );

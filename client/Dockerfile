@@ -9,9 +9,7 @@ RUN npm install --legacy-peer-deps
 # Копирование исходного кода
 COPY . .
 
-# Диагностика: выводим содержимое src/components и сам файл MainLayout.tsx
-RUN ls -l /app/src/components
-RUN cat /app/src/components/MainLayout.tsx
+
 
 # Сборка приложения
 RUN npm run build

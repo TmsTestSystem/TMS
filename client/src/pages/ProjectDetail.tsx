@@ -6,7 +6,7 @@ import TestCaseSidebar from '../components/TestCaseSidebar.tsx';
 import { toast } from 'react-toastify';
 
 interface Project {
-  id: number;
+  id: string;
   name: string;
   description?: string;
   gitRepoUrl?: string;
@@ -15,7 +15,7 @@ interface Project {
 }
 
 interface TestCase {
-  id: number;
+  id: string;
   title: string;
   description?: string;
   preconditions?: string;

@@ -5,7 +5,7 @@ const router = express.Router();
 // Получить все тест-кейсы
 router.get('/', async (req: Request, res: Response) => {
   try {
-    const result = await query('SELECT * FROM test_cases ORDER BY id DESC');
+    const result = await query('SELECT * FROM test_cases WHERE is_deleted = FALSE ORDER BY id DESC');
     return res.json(result.rows);
   } catch (error) {
     return res.status(500).json({ error: 'Ошибка получения тест-кейсов' });
@@ -17,7 +17,7 @@ router.get('/section/:sectionId', async (req: Request, res: Response) => {
   try {
     const { sectionId } = req.params;
     const result = await query(
-      'SELECT * FROM test_cases WHERE section_id = $1 ORDER BY id DESC',
+      'SELECT * FROM test_cases WHERE section_id = $1 AND is_deleted = FALSE ORDER BY id DESC',
       [sectionId]
     );
     return res.json(result.rows);
@@ -32,7 +32,7 @@ router.get('/project/:projectId', async (req: Request, res: Response) => {
     const { projectId } = req.params;
     console.log(`[API] Запрос тест-кейсов для проекта ${projectId}`);
     const result = await query(
-      'SELECT * FROM test_cases WHERE project_id = $1 ORDER BY id DESC',
+      'SELECT * FROM test_cases WHERE project_id = $1 AND is_deleted = FALSE ORDER BY id DESC',
       [projectId]
     );
     console.log(`[API] Найдено ${result.rows.length} тест-кейсов для проекта ${projectId}`);
@@ -47,7 +47,7 @@ router.get('/project/:projectId', async (req: Request, res: Response) => {
 router.get('/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const result = await query('SELECT * FROM test_cases WHERE id = $1', [id]);
+    const result = await query('SELECT * FROM test_cases WHERE id = $1 AND is_deleted = FALSE', [id]);
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Тест-кейс не найден' });
     }
@@ -132,17 +132,37 @@ router.put('/:id', async (req: Request, res: Response) => {
   }
 });
 
-// Удалить тест-кейс
+// Удалить тест-кейс (soft delete)
 router.delete('/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const result = await query('DELETE FROM test_cases WHERE id = $1 RETURNING *', [id]);
+    const result = await query(
+      'UPDATE test_cases SET is_deleted = TRUE, deleted_at = NOW() WHERE id = $1 AND is_deleted = FALSE RETURNING *', 
+      [id]
+    );
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Тест-кейс не найден' });
     }
     return res.json({ message: 'Тест-кейс успешно удален' });
   } catch (error) {
     return res.status(500).json({ error: 'Ошибка удаления тест-кейса' });
+  }
+});
+
+// Восстановить тест-кейс (restore)
+router.post('/:id/restore', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const result = await query(
+      'UPDATE test_cases SET is_deleted = FALSE, deleted_at = NULL WHERE id = $1 AND is_deleted = TRUE RETURNING *', 
+      [id]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Тест-кейс не найден или уже восстановлен' });
+    }
+    return res.json({ message: 'Тест-кейс успешно восстановлен', testCase: result.rows[0] });
+  } catch (error) {
+    return res.status(500).json({ error: 'Ошибка восстановления тест-кейса' });
   }
 });
 

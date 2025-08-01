@@ -8,7 +8,7 @@ const database_1 = require("../config/database");
 const router = express_1.default.Router();
 router.get('/', async (req, res) => {
     try {
-        const result = await (0, database_1.query)('SELECT * FROM test_cases ORDER BY id DESC');
+        const result = await (0, database_1.query)('SELECT * FROM test_cases WHERE is_deleted = FALSE ORDER BY id DESC');
         return res.json(result.rows);
     }
     catch (error) {
@@ -18,7 +18,7 @@ router.get('/', async (req, res) => {
 router.get('/section/:sectionId', async (req, res) => {
     try {
         const { sectionId } = req.params;
-        const result = await (0, database_1.query)('SELECT * FROM test_cases WHERE section_id = $1 ORDER BY id DESC', [sectionId]);
+        const result = await (0, database_1.query)('SELECT * FROM test_cases WHERE section_id = $1 AND is_deleted = FALSE ORDER BY id DESC', [sectionId]);
         return res.json(result.rows);
     }
     catch (error) {
@@ -29,7 +29,7 @@ router.get('/project/:projectId', async (req, res) => {
     try {
         const { projectId } = req.params;
         console.log(`[API] Запрос тест-кейсов для проекта ${projectId}`);
-        const result = await (0, database_1.query)('SELECT * FROM test_cases WHERE project_id = $1 ORDER BY id DESC', [projectId]);
+        const result = await (0, database_1.query)('SELECT * FROM test_cases WHERE project_id = $1 AND is_deleted = FALSE ORDER BY id DESC', [projectId]);
         console.log(`[API] Найдено ${result.rows.length} тест-кейсов для проекта ${projectId}`);
         return res.json(result.rows);
     }
@@ -41,7 +41,7 @@ router.get('/project/:projectId', async (req, res) => {
 router.get('/:id', async (req, res) => {
     try {
         const { id } = req.params;
-        const result = await (0, database_1.query)('SELECT * FROM test_cases WHERE id = $1', [id]);
+        const result = await (0, database_1.query)('SELECT * FROM test_cases WHERE id = $1 AND is_deleted = FALSE', [id]);
         if (result.rows.length === 0) {
             return res.status(404).json({ error: 'Тест-кейс не найден' });
         }
@@ -92,7 +92,7 @@ router.put('/:id', async (req, res) => {
 router.delete('/:id', async (req, res) => {
     try {
         const { id } = req.params;
-        const result = await (0, database_1.query)('DELETE FROM test_cases WHERE id = $1 RETURNING *', [id]);
+        const result = await (0, database_1.query)('UPDATE test_cases SET is_deleted = TRUE, deleted_at = NOW() WHERE id = $1 AND is_deleted = FALSE RETURNING *', [id]);
         if (result.rows.length === 0) {
             return res.status(404).json({ error: 'Тест-кейс не найден' });
         }
@@ -100,6 +100,19 @@ router.delete('/:id', async (req, res) => {
     }
     catch (error) {
         return res.status(500).json({ error: 'Ошибка удаления тест-кейса' });
+    }
+});
+router.post('/:id/restore', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const result = await (0, database_1.query)('UPDATE test_cases SET is_deleted = FALSE, deleted_at = NULL WHERE id = $1 AND is_deleted = TRUE RETURNING *', [id]);
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Тест-кейс не найден или уже восстановлен' });
+        }
+        return res.json({ message: 'Тест-кейс успешно восстановлен', testCase: result.rows[0] });
+    }
+    catch (error) {
+        return res.status(500).json({ error: 'Ошибка восстановления тест-кейса' });
     }
 });
 exports.default = router;

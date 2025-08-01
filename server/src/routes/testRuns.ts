@@ -17,10 +17,11 @@ router.get('/', async (req: Request, res: Response) => {
         COUNT(CASE WHEN tr2.status = 'blocked' THEN 1 END) as blocked_count,
         COUNT(CASE WHEN tr2.status = 'not_run' THEN 1 END) as not_run_count
       FROM test_runs tr
-      LEFT JOIN test_plans tp ON tr.test_plan_id = tp.id
+      LEFT JOIN test_plans tp ON tr.test_plan_id = tp.id AND tp.is_deleted = FALSE
       LEFT JOIN projects p ON tp.project_id = p.id
       LEFT JOIN users u ON tr.started_by = u.id
       LEFT JOIN test_results tr2 ON tr.id = tr2.test_run_id
+      WHERE tr.is_deleted = FALSE
       GROUP BY tr.id, tp.name, p.name, u.username
       ORDER BY tr.created_at DESC
     `);
@@ -46,7 +47,7 @@ router.get('/test-plan/:testPlanId', async (req: Request, res: Response) => {
       FROM test_runs tr
       LEFT JOIN users u ON tr.started_by = u.id
       LEFT JOIN test_results tr2 ON tr.id = tr2.test_run_id
-      WHERE tr.test_plan_id = $1
+      WHERE tr.test_plan_id = $1 AND tr.is_deleted = FALSE
       GROUP BY tr.id, u.username
       ORDER BY tr.created_at DESC
     `, [testPlanId]);
@@ -67,10 +68,10 @@ router.get('/:id', async (req: Request, res: Response) => {
         p.name as project_name,
         u.username as started_by_name
       FROM test_runs tr
-      LEFT JOIN test_plans tp ON tr.test_plan_id = tp.id
+      LEFT JOIN test_plans tp ON tr.test_plan_id = tp.id AND tp.is_deleted = FALSE
       LEFT JOIN projects p ON tp.project_id = p.id
       LEFT JOIN users u ON tr.started_by = u.id
-      WHERE tr.id = $1
+      WHERE tr.id = $1 AND tr.is_deleted = FALSE
     `, [id]);
     
     if (result.rows.length === 0) {
@@ -169,12 +170,12 @@ router.put('/:id', async (req: Request, res: Response) => {
   }
 });
 
-// Удалить тестовый прогон
+// Удалить тестовый прогон (soft delete)
 router.delete('/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const result = await query(
-      'DELETE FROM test_runs WHERE id = $1 RETURNING *',
+      'UPDATE test_runs SET is_deleted = TRUE, deleted_at = NOW() WHERE id = $1 AND is_deleted = FALSE RETURNING *',
       [id]
     );
     
@@ -185,6 +186,25 @@ router.delete('/:id', async (req: Request, res: Response) => {
     return res.json({ message: 'Тестовый прогон успешно удален' });
   } catch (error) {
     return res.status(500).json({ error: 'Ошибка удаления тестового прогона' });
+  }
+});
+
+// Восстановить тестовый прогон (restore)
+router.post('/:id/restore', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const result = await query(
+      'UPDATE test_runs SET is_deleted = FALSE, deleted_at = NULL WHERE id = $1 AND is_deleted = TRUE RETURNING *',
+      [id]
+    );
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Тестовый прогон не найден или уже восстановлен' });
+    }
+    
+    return res.json({ message: 'Тестовый прогон успешно восстановлен', testRun: result.rows[0] });
+  } catch (error) {
+    return res.status(500).json({ error: 'Ошибка восстановления тестового прогона' });
   }
 });
 

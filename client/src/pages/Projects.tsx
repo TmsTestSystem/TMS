@@ -5,7 +5,7 @@ import EditProjectModal from '../components/EditProjectModal.tsx';
 import { toast } from 'react-toastify';
 
 interface Project {
-  id: number;
+  id: string;
   name: string;
   description?: string;
   gitRepoUrl?: string;
@@ -96,7 +96,7 @@ const Projects: React.FC = () => {
     }
   };
 
-  const handleDeleteProject = async (projectId: number) => {
+  const handleDeleteProject = async (projectId: string) => {
     if (!window.confirm('Вы уверены, что хотите удалить этот проект? Это действие нельзя отменить.')) {
       return;
     }

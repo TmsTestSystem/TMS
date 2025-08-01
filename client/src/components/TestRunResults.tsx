@@ -2,8 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { CheckCircleIcon, XMarkIcon, InformationCircleIcon, DocumentTextIcon, PauseIcon, PlayIcon, StopIcon } from '@heroicons/react/24/outline';
 
 interface TestResult {
-  id: number;
-  test_case_id: number;
+  id: string;
+  test_case_id: string;
   test_case_title: string;
   test_case_description?: string;
   test_case_priority: string;
@@ -18,7 +18,7 @@ interface TestResult {
 }
 
 interface TestRunResultsProps {
-  testRunId: number;
+  testRunId: string;
   isOpen: boolean;
   onClose: () => void;
 }
@@ -221,7 +221,7 @@ const TestRunResults: React.FC<TestRunResultsProps> = ({ testRunId, isOpen, onCl
     return `${m}:${s}`;
   };
 
-  const updateTestResult = async (testCaseId: number, status: string, notes?: string) => {
+  const updateTestResult = async (testCaseId: string, status: string, notes?: string) => {
     console.log('PUT /api/test-runs/' + testRunId + '/results/' + testCaseId, { status, notes });
     try {
       const response = await fetch(`/api/test-runs/${testRunId}/results/${testCaseId}`, {
