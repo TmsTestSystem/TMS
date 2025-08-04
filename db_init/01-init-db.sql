@@ -63,6 +63,15 @@ CREATE TABLE IF NOT EXISTS test_cases (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Создание таблицы для связи тест-планов и тест-кейсов (многие-ко-многим)
+CREATE TABLE IF NOT EXISTS test_plan_cases (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    test_plan_id UUID NOT NULL REFERENCES test_plans(id) ON DELETE CASCADE,
+    test_case_id UUID NOT NULL REFERENCES test_cases(id) ON DELETE CASCADE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE(test_plan_id, test_case_id)
+);
+
 CREATE TABLE IF NOT EXISTS test_runs (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     test_plan_id UUID REFERENCES test_plans(id) ON DELETE CASCADE,
@@ -83,6 +92,7 @@ CREATE TABLE IF NOT EXISTS test_results (
     test_case_id UUID REFERENCES test_cases(id) ON DELETE CASCADE,
     status VARCHAR(50) DEFAULT 'not_executed',
     notes TEXT,
+    duration INTEGER DEFAULT 0,
     executed_by UUID REFERENCES users(id),
     executed_at TIMESTAMP,
     created_by UUID REFERENCES users(id),
@@ -148,6 +158,8 @@ CREATE TABLE IF NOT EXISTS test_case_tags (
 CREATE INDEX IF NOT EXISTS idx_test_cases_project_id ON test_cases(project_id);
 CREATE INDEX IF NOT EXISTS idx_test_cases_section_id ON test_cases(section_id);
 CREATE INDEX IF NOT EXISTS idx_test_cases_test_plan_id ON test_cases(test_plan_id);
+CREATE INDEX IF NOT EXISTS idx_test_plan_cases_plan_id ON test_plan_cases(test_plan_id);
+CREATE INDEX IF NOT EXISTS idx_test_plan_cases_case_id ON test_plan_cases(test_case_id);
 CREATE INDEX IF NOT EXISTS idx_test_plans_project_id ON test_plans(project_id);
 CREATE INDEX IF NOT EXISTS idx_test_runs_test_plan_id ON test_runs(test_plan_id);
 CREATE INDEX IF NOT EXISTS idx_test_results_test_run_id ON test_results(test_run_id);
@@ -162,6 +174,15 @@ INSERT INTO users (id, username, email, password_hash, role) VALUES
 ('550e8400-e29b-41d4-a716-446655440000', 'admin', 'admin@example.com', '$2b$10$rQZ8N3YqJ8K9L0M1N2O3P4Q5R6S7T8U9V0W1X2Y3Z4A5B6C7D8E9F0G1H2I', 'admin')
 ON CONFLICT (username) DO NOTHING;
 
-INSERT INTO projects (id, name, description, created_by) VALUES 
-('b5c5b2b7-1e52-4600-adcb-c5d2b39adf21', 'Тестовый проект', 'Описание тестового проекта', '550e8400-e29b-41d4-a716-446655440000')
-ON CONFLICT (id) DO NOTHING; 
+
+
+-- Миграция существующих данных: переносим связи из поля test_plan_id в таблицу test_plan_cases
+INSERT INTO test_plan_cases (test_plan_id, test_case_id)
+SELECT test_plan_id, id 
+FROM test_cases 
+WHERE test_plan_id IS NOT NULL 
+AND NOT EXISTS (
+    SELECT 1 FROM test_plan_cases tpc 
+    WHERE tpc.test_plan_id = test_cases.test_plan_id 
+    AND tpc.test_case_id = test_cases.id
+); 

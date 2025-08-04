@@ -380,8 +380,16 @@ async function exportJsonProject(query: any, projectId: string, repoPath: string
   const attachmentsMetadataPath = path.join(repoPath, 'attachments', 'metadata', 'attachments.json');
   if (fs.existsSync(attachmentsMetadataPath)) {
     try {
-      const existingMetadata = JSON.parse(fs.readFileSync(attachmentsMetadataPath, 'utf8'));
-      existingMetadata.forEach((att: any) => existingFiles.add(att.filename));
+      const fileContent = fs.readFileSync(attachmentsMetadataPath, 'utf8');
+      // Проверяем, что файл содержит валидный JSON, а не HTML
+      if (fileContent.trim().startsWith('{') || fileContent.trim().startsWith('[')) {
+        const existingMetadata = JSON.parse(fileContent);
+        if (Array.isArray(existingMetadata)) {
+          existingMetadata.forEach((att: any) => existingFiles.add(att.filename));
+        }
+      } else {
+        console.warn('[Git Export] Файл attachments.json содержит невалидный JSON, игнорируем');
+      }
     } catch (error) {
       console.warn('[Git Export] Ошибка чтения существующих метаданных attachments:', error);
     }
@@ -725,6 +733,25 @@ async function importJsonProject(query: any, projectId: string, repoPath: string
     }
     
     console.log(`[Git Import] Удалено ${localAttachments.rows.length} attachments (файл метаданных не найден)`);
+  }
+  
+  // Миграция связей из test_plan_id в test_plan_cases
+  console.log('[Git Import] Выполняем миграцию связей test_plan_cases...');
+  try {
+    const migrationResult = await query(`
+      INSERT INTO test_plan_cases (test_plan_id, test_case_id)
+      SELECT test_plan_id, id 
+      FROM test_cases 
+      WHERE test_plan_id IS NOT NULL 
+      AND NOT EXISTS (
+          SELECT 1 FROM test_plan_cases tpc 
+          WHERE tpc.test_plan_id = test_cases.test_plan_id 
+          AND tpc.test_case_id = test_cases.id
+      )
+    `);
+    console.log(`[Git Import] Миграция завершена. Добавлено связей: ${migrationResult.rowCount}`);
+  } catch (error) {
+    console.error('[Git Import] Ошибка миграции test_plan_cases:', error);
   }
   
   // Удалён второй проход по разделам (test_case_sections)

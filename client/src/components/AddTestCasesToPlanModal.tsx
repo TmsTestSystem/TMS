@@ -49,10 +49,12 @@ const AddTestCasesToPlanModal: React.FC<AddTestCasesToPlanModalProps> = ({ isOpe
   const fetchTestCases = async () => {
     setLoading(true);
     try {
-      const response = await fetch(`/api/test-cases/project/${projectId}`);
+      console.log('Fetching test cases for project:', projectId);
+      const response = await fetch(`/api/test-cases/project/${projectId}?excludePlanId=${testPlanId}`);
       if (response.ok) {
         const data = await response.json();
-        setTestCases(data.filter((tc: any) => !tc.test_plan_id || tc.test_plan_id === null));
+        console.log('Available test cases:', data);
+        setTestCases(data);
       }
     } finally {
       setLoading(false);
@@ -71,14 +73,26 @@ const AddTestCasesToPlanModal: React.FC<AddTestCasesToPlanModalProps> = ({ isOpe
   };
 
   const handleToggleCase = (caseId: string) => {
+    console.log('Toggle case:', caseId);
     setSelectedCases(prev => {
       const next = new Set(prev);
-      if (next.has(caseId)) next.delete(caseId); else next.add(caseId);
+      if (next.has(caseId)) {
+        next.delete(caseId);
+        console.log('Removed case:', caseId);
+      } else {
+        next.add(caseId);
+        console.log('Added case:', caseId);
+      }
+      // Принудительно обновляем состояние
+      setTimeout(() => {
+        setSelectedCases(current => new Set(current));
+      }, 0);
       return next;
     });
   };
 
   const handleToggleSectionCheckbox = (sectionId: string) => {
+    console.log('Toggle section:', sectionId);
     // Выделить/снять все кейсы в разделе (и вложенных)
     const collectCases = (sid: string): string[] => {
       let ids = getSectionTestCases(sid).map(tc => tc.id);
@@ -89,18 +103,26 @@ const AddTestCasesToPlanModal: React.FC<AddTestCasesToPlanModalProps> = ({ isOpe
     };
     const allIds = collectCases(sectionId);
     const allSelected = allIds.every(id => selectedCases.has(id));
+    console.log('All IDs:', allIds, 'All selected:', allSelected);
     setSelectedCases(prev => {
       const next = new Set(prev);
       if (allSelected) {
         allIds.forEach(id => next.delete(id));
+        console.log('Removed all cases from section');
       } else {
         allIds.forEach(id => next.add(id));
+        console.log('Added all cases from section');
       }
+      // Принудительно обновляем состояние
+      setTimeout(() => {
+        setSelectedCases(current => new Set(current));
+      }, 0);
       return next;
     });
   };
 
   const renderSection = (section: Section, level = 0) => {
+    const selectedCasesKey = Array.from(selectedCases).join(',');
     const childSections = getChildSections(section.id);
     const sectionCases = getSectionTestCases(section.id);
     // Определяем, выбраны ли все кейсы в разделе (и вложенных)
@@ -114,8 +136,15 @@ const AddTestCasesToPlanModal: React.FC<AddTestCasesToPlanModalProps> = ({ isOpe
     const allIds = collectCases(section.id);
     const allSelected = allIds.length > 0 && allIds.every(id => selectedCases.has(id));
     const someSelected = allIds.some(id => selectedCases.has(id));
+    
+    // Показываем раздел, если в нем есть тест-кейсы или дочерние разделы с тест-кейсами
+    const hasTestCasesInSection = allIds.length > 0;
+    console.log('Section:', section.name, 'has cases:', hasTestCasesInSection, 'allIds:', allIds);
+    if (!hasTestCasesInSection) {
+      return null;
+    }
     return (
-      <div key={section.id} style={{ marginLeft: level * 16 }}>
+      <div key={`${section.id}-${selectedCasesKey}`} style={{ marginLeft: level * 16 }}>
         <div className="flex items-center py-1">
           {childSections.length > 0 || sectionCases.length > 0 ? (
             <button 
@@ -134,8 +163,20 @@ const AddTestCasesToPlanModal: React.FC<AddTestCasesToPlanModalProps> = ({ isOpe
           <input
             type="checkbox"
             checked={allSelected}
-            ref={el => { if (el) el.indeterminate = !allSelected && someSelected; }}
-            onChange={() => handleToggleSectionCheckbox(section.id)}
+            ref={el => { 
+              if (el) {
+                el.indeterminate = !allSelected && someSelected;
+              }
+            }}
+            onChange={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              handleToggleSectionCheckbox(section.id);
+            }}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+            }}
             className="mr-2"
           />
           <span className="font-semibold text-gray-800">{section.name}</span>
@@ -151,15 +192,23 @@ const AddTestCasesToPlanModal: React.FC<AddTestCasesToPlanModalProps> = ({ isOpe
   };
 
   const renderCase = (tc: TestCase, level = 0) => (
-    <div key={tc.id} style={{ marginLeft: level * 16 + 24 }} className="flex items-center py-1">
+    <div key={`${tc.id}-${selectedCases.has(tc.id)}`} style={{ marginLeft: level * 16 + 24 }} className="flex items-center py-1">
       <input
         type="checkbox"
         checked={selectedCases.has(tc.id)}
-        onChange={() => handleToggleCase(tc.id)}
+        onChange={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          handleToggleCase(tc.id);
+        }}
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+        }}
         className="mr-2"
       />
       <span className="text-gray-900">{tc.title}</span>
-      <span className="ml-2 text-xs px-2 py-1 rounded-full bg-gray-100 text-gray-700">{tc.priority}</span>
+      <span className="ml-2 text-xs px-2 px-2 py-1 rounded-full bg-gray-100 text-gray-700">{tc.priority}</span>
       <span className="ml-2 text-xs px-2 py-1 rounded-full bg-gray-100 text-gray-700">{tc.status}</span>
     </div>
   );
@@ -167,16 +216,19 @@ const AddTestCasesToPlanModal: React.FC<AddTestCasesToPlanModalProps> = ({ isOpe
   const handleAdd = async () => {
     setLoading(true);
     try {
-      await Promise.all(Array.from(selectedCases).map(tcId =>
-        fetch(`/api/test-cases/${tcId}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ testPlanId })
-        })
-      ));
-      setSelectedCases(new Set());
-      onAdded();
-      onClose();
+      const response = await fetch(`/api/test-plans/${testPlanId}/test-cases`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ testCaseIds: Array.from(selectedCases) })
+      });
+      
+      if (response.ok) {
+        setSelectedCases(new Set());
+        onAdded();
+        onClose();
+      } else {
+        console.error('Ошибка добавления тест-кейсов в план');
+      }
     } finally {
       setLoading(false);
     }
@@ -192,11 +244,12 @@ const AddTestCasesToPlanModal: React.FC<AddTestCasesToPlanModalProps> = ({ isOpe
           <div className="text-center py-8">Загрузка...</div>
         ) : (
           <form onSubmit={e => { e.preventDefault(); handleAdd(); }}>
-            <div className="mb-4">
-              {sections.filter(s => !s.parent_id).map(section => renderSection(section))}
-              {/* Кейсы без раздела */}
-              {getSectionTestCases(null).map(tc => renderCase(tc, 0))}
-            </div>
+                    <div className="mb-4">
+          {/* Отображаем разделы в иерархическом виде */}
+          {sections.filter(s => !s.parent_id).map(section => renderSection(section))}
+          {/* Кейсы без раздела */}
+          {getSectionTestCases(null).map(tc => renderCase(tc, 0))}
+        </div>
             <div className="flex justify-end space-x-3">
               <button type="button" onClick={onClose} className="px-4 py-2 text-gray-600 border border-gray-300 rounded-md hover:bg-gray-50">Отмена</button>
               <button type="submit" className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700" disabled={selectedCases.size === 0 || loading}>Добавить</button>

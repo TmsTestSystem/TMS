@@ -116,6 +116,31 @@ const TestPlanDetail: React.FC = () => {
     return allSections.filter(section => hasTestCasesInSection(section.id));
   };
 
+  // Функция для получения всех разделов, которые содержат тест-кейсы из плана (включая родительские)
+  const getAllSectionsWithTestCases = () => {
+    const sectionsWithCases = new Set<string>();
+    
+    // Добавляем разделы, которые содержат тест-кейсы
+    testCases.forEach(tc => {
+      if (tc.section_id) {
+        sectionsWithCases.add(tc.section_id);
+      }
+    });
+    
+    // Добавляем родительские разделы
+    const addParentSections = (sectionId: string) => {
+      const section = sections.find(s => s.id === sectionId);
+      if (section && section.parent_id) {
+        sectionsWithCases.add(section.parent_id);
+        addParentSections(section.parent_id);
+      }
+    };
+    
+    Array.from(sectionsWithCases).forEach(addParentSections);
+    
+    return sections.filter(s => sectionsWithCases.has(s.id));
+  };
+
   const handleToggleSection = (sectionId: string) => {
     setExpandedSections(prev => {
       const next = new Set(prev);
@@ -185,11 +210,9 @@ const TestPlanDetail: React.FC = () => {
   const handleRemoveTestCase = async (testCaseId: string) => {
     if (!window.confirm('Удалить тест-кейс из плана?')) return;
     try {
-      // Отвязываем тест-кейс от плана (обновляем test_plan_id на null)
-      await fetch(`/api/test-cases/${testCaseId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ testPlanId: null })
+      // Удаляем связь из таблицы test_plan_cases
+      await fetch(`/api/test-plans/${id}/test-cases/${testCaseId}`, {
+        method: 'DELETE'
       });
       fetchTestCases();
     } catch (e) {
@@ -255,6 +278,7 @@ const TestPlanDetail: React.FC = () => {
           <div className="text-gray-500">Нет тест-кейсов в этом плане</div>
         ) : (
           <div>
+            {/* Отображаем разделы с тест-кейсами */}
             {getSectionsWithTestCases(null).map(section => renderSection(section))}
             {/* Кейсы без раздела */}
             {getSectionTestCases(null).map(tc => renderCase(tc, 0))}

@@ -110,14 +110,17 @@ router.post('/', async (req: Request, res: Response) => {
       `INSERT INTO test_runs (
         test_plan_id, name, description, status, started_by, created_at
       ) VALUES ($1, $2, $3, $4, $5, NOW()) RETURNING *`,
-      [testPlanId, name, description, 'planned', '00000000-0000-0000-0000-000000000001']
+      [testPlanId, name, description, 'planned', '550e8400-e29b-41d4-a716-446655440000']
     );
     
     const testRun = result.rows[0];
     console.log('[CREATE TEST RUN] created test_run_id:', testRun.id);
-    // Получаем все тест-кейсы тест-плана
+    // Получаем все тест-кейсы тест-плана через таблицу test_plan_cases
     const testCasesResult = await query(
-      'SELECT id FROM test_cases WHERE test_plan_id = $1',
+      `SELECT tc.id 
+       FROM test_cases tc
+       INNER JOIN test_plan_cases tpc ON tc.id = tpc.test_case_id
+       WHERE tpc.test_plan_id = $1 AND tc.is_deleted = FALSE`,
       [testPlanId]
     );
     console.log('[CREATE TEST RUN] found test_case_ids:', testCasesResult.rows.map(r => r.id));
@@ -212,6 +215,7 @@ router.post('/:id/restore', async (req: Request, res: Response) => {
 router.get('/:id/results', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
+    console.log(`[API] Запрос результатов для прогона ${id}`);
     const result = await query(`
       SELECT 
         tr.*,
@@ -230,9 +234,48 @@ router.get('/:id/results', async (req: Request, res: Response) => {
       ORDER BY tc.id
     `, [id]);
     
+    console.log(`[API] Найдено ${result.rows.length} результатов для прогона ${id}`);
     return res.json(result.rows);
   } catch (error) {
+    console.error(`[API] Ошибка получения результатов прогона ${req.params.id}:`, error);
     return res.status(500).json({ error: 'Ошибка получения результатов тестов' });
+  }
+});
+
+// Получить тест-кейсы прогона (новый endpoint)
+router.get('/:id/test-cases', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    console.log(`[API] Запрос тест-кейсов для прогона ${id}`);
+    
+    // Сначала получаем информацию о прогоне
+    const runResult = await query(`
+      SELECT test_plan_id FROM test_runs WHERE id = $1
+    `, [id]);
+    
+    if (runResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Тестовый прогон не найден' });
+    }
+    
+    const testPlanId = runResult.rows[0].test_plan_id;
+    
+    // Получаем тест-кейсы плана через таблицу test_plan_cases
+    const result = await query(`
+      SELECT 
+        tc.*,
+        u.username as assigned_to_name
+      FROM test_cases tc
+      INNER JOIN test_plan_cases tpc ON tc.id = tpc.test_case_id
+      LEFT JOIN users u ON tc.assigned_to = u.id
+      WHERE tpc.test_plan_id = $1 AND tc.is_deleted = FALSE
+      ORDER BY tc.id DESC
+    `, [testPlanId]);
+    
+    console.log(`[API] Найдено ${result.rows.length} тест-кейсов для прогона ${id} (план: ${testPlanId})`);
+    return res.json(result.rows);
+  } catch (error) {
+    console.error(`[API] Ошибка получения тест-кейсов прогона ${req.params.id}:`, error);
+    return res.status(500).json({ error: 'Ошибка получения тест-кейсов прогона' });
   }
 });
 
@@ -242,8 +285,8 @@ router.put('/:id/results/:testCaseId', async (req: Request, res: Response) => {
     const { id, testCaseId } = req.params;
     const { 
       status, 
-      notes, 
-      duration 
+      notes,
+      duration
     } = req.body;
     
     if (!status) {
@@ -268,7 +311,7 @@ router.put('/:id/results/:testCaseId', async (req: Request, res: Response) => {
       `UPDATE test_results 
        SET status = $1, notes = $2, duration = $3, executed_by = $4, executed_at = COALESCE($5, executed_at)
        WHERE test_run_id = $6 AND test_case_id = $7 RETURNING *`,
-      [status, notes, duration, '00000000-0000-0000-0000-000000000001', executedAt, id, testCaseId]
+      [status, notes, duration || 0, '550e8400-e29b-41d4-a716-446655440000', executedAt, id, testCaseId]
     );
     
     if (result.rows.length === 0) {

@@ -27,21 +27,31 @@ router.get('/section/:sectionId', async (req: Request, res: Response) => {
 });
 
 // Получить тест-кейсы проекта
-router.get('/project/:projectId', async (req: Request, res: Response) => {
-  try {
-    const { projectId } = req.params;
-    console.log(`[API] Запрос тест-кейсов для проекта ${projectId}`);
-    const result = await query(
-      'SELECT * FROM test_cases WHERE project_id = $1 AND is_deleted = FALSE ORDER BY id DESC',
-      [projectId]
-    );
-    console.log(`[API] Найдено ${result.rows.length} тест-кейсов для проекта ${projectId}`);
-    return res.json(result.rows);
-  } catch (error) {
-    console.error(`[API] Ошибка получения тест-кейсов проекта ${req.params.projectId}:`, error);
-    return res.status(500).json({ error: 'Ошибка получения тест-кейсов проекта' });
-  }
-});
+  router.get('/project/:projectId', async (req: Request, res: Response) => {
+    try {
+      const { projectId } = req.params;
+      const excludePlanId = req.query.excludePlanId as string;
+      console.log(`[API] Запрос тест-кейсов для проекта ${projectId}, исключая план ${excludePlanId}`);
+      
+      let queryText = 'SELECT * FROM test_cases WHERE project_id = $1 AND is_deleted = FALSE';
+      let queryParams = [projectId];
+      
+      if (excludePlanId) {
+        queryText += ' AND id NOT IN (SELECT test_case_id FROM test_plan_cases WHERE test_plan_id = $2)';
+        queryParams.push(excludePlanId);
+      }
+      
+      queryText += ' ORDER BY id DESC';
+      
+      const result = await query(queryText, queryParams);
+      console.log(`[API] Найдено ${result.rows.length} тест-кейсов для проекта ${projectId}`);
+      console.log(`[API] Тест-кейсы:`, result.rows.map(tc => ({ id: tc.id, title: tc.title })));
+      return res.json(result.rows);
+    } catch (error) {
+      console.error(`[API] Ошибка получения тест-кейсов проекта ${req.params.projectId}:`, error);
+      return res.status(500).json({ error: 'Ошибка получения тест-кейсов проекта' });
+    }
+  });
 
 // Получить тест-кейс по ID
 router.get('/:id', async (req: Request, res: Response) => {

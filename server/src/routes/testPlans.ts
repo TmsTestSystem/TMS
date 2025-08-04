@@ -87,7 +87,7 @@ router.post('/', async (req: Request, res: Response) => {
       `INSERT INTO test_plans (
         project_id, name, description, status, created_by, created_at, updated_at
       ) VALUES ($1, $2, $3, $4, $5, NOW(), NOW()) RETURNING *`,
-      [projectId, name, description, status || 'draft', '00000000-0000-0000-0000-000000000001']
+      [projectId, name, description, status || 'draft', '550e8400-e29b-41d4-a716-446655440000']
     );
     
     return res.status(201).json(result.rows[0]);
@@ -166,23 +166,76 @@ router.post('/:id/restore', async (req: Request, res: Response) => {
 });
 
 // Получить тест-кейсы тест-плана
-router.get('/:id/test-cases', async (req: Request, res: Response) => {
-  try {
-    const { id } = req.params;
-    const result = await query(`
-      SELECT 
-        tc.*,
-        u.username as assigned_to_name
-      FROM test_cases tc
-      LEFT JOIN users u ON tc.assigned_to = u.id
-      WHERE tc.test_plan_id = $1 AND tc.is_deleted = FALSE
-      ORDER BY tc.id DESC
-    `, [id]);
-    
-    return res.json(result.rows);
-  } catch (error) {
-    return res.status(500).json({ error: 'Ошибка получения тест-кейсов плана' });
-  }
-});
+    router.get('/:id/test-cases', async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      console.log(`[API] Запрос тест-кейсов для плана ${id}`);
 
-export default router; 
+      const result = await query(`
+        SELECT
+          tc.*,
+          u.username as assigned_to_name
+        FROM test_cases tc
+        INNER JOIN test_plan_cases tpc ON tc.id = tpc.test_case_id
+        LEFT JOIN users u ON tc.assigned_to = u.id
+        WHERE tpc.test_plan_id = $1 AND tc.is_deleted = FALSE
+        ORDER BY tc.id DESC
+      `, [id]);
+
+      console.log(`[API] Найдено ${result.rows.length} тест-кейсов для плана ${id}`);
+      return res.json(result.rows);
+    } catch (error) {
+      console.error(`[API] Ошибка получения тест-кейсов плана ${req.params.id}:`, error);
+      return res.status(500).json({ error: 'Ошибка получения тест-кейсов плана' });
+    }
+  });
+
+  // Добавить тест-кейсы в план
+  router.post('/:id/test-cases', async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const { testCaseIds } = req.body;
+
+      if (!testCaseIds || !Array.isArray(testCaseIds)) {
+        return res.status(400).json({ error: 'Список ID тест-кейсов обязателен' });
+      }
+
+      console.log(`[API] Добавление ${testCaseIds.length} тест-кейсов в план ${id}`);
+
+      // Добавляем связи в таблицу test_plan_cases
+      for (const testCaseId of testCaseIds) {
+        await query(`
+          INSERT INTO test_plan_cases (test_plan_id, test_case_id)
+          VALUES ($1, $2)
+          ON CONFLICT (test_plan_id, test_case_id) DO NOTHING
+        `, [id, testCaseId]);
+      }
+
+      console.log(`[API] Добавлено ${testCaseIds.length} тест-кейсов в план ${id}`);
+      return res.status(201).json({ message: 'Тест-кейсы добавлены в план' });
+    } catch (error) {
+      console.error(`[API] Ошибка добавления тест-кейсов в план ${req.params.id}:`, error);
+      return res.status(500).json({ error: 'Ошибка добавления тест-кейсов в план' });
+    }
+  });
+
+  // Удалить тест-кейс из плана
+  router.delete('/:id/test-cases/:testCaseId', async (req: Request, res: Response) => {
+    try {
+      const { id, testCaseId } = req.params;
+      console.log(`[API] Удаление тест-кейса ${testCaseId} из плана ${id}`);
+
+      await query(`
+        DELETE FROM test_plan_cases 
+        WHERE test_plan_id = $1 AND test_case_id = $2
+      `, [id, testCaseId]);
+
+      console.log(`[API] Тест-кейс ${testCaseId} удален из плана ${id}`);
+      return res.json({ message: 'Тест-кейс удален из плана' });
+    } catch (error) {
+      console.error(`[API] Ошибка удаления тест-кейса из плана:`, error);
+      return res.status(500).json({ error: 'Ошибка удаления тест-кейса из плана' });
+    }
+  });
+
+  export default router; 

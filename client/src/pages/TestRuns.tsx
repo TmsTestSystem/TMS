@@ -192,7 +192,7 @@ const TestRuns: React.FC = () => {
           onClick={() => setIsCreateModalOpen(true)}
           className="btn btn-primary"
         >
-          Запустить прогон
+          Создать прогон
         </button>
       </div>
 
@@ -209,7 +209,7 @@ const TestRuns: React.FC = () => {
             onClick={() => setIsCreateModalOpen(true)}
             className="btn btn-primary"
           >
-            Запустить прогон
+            Создать прогон
           </button>
         </div>
       ) : (
