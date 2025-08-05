@@ -5,7 +5,7 @@ const router = express.Router();
 // Получить все проекты
 router.get('/', async (req: Request, res: Response) => {
   try {
-    const result = await query('SELECT * FROM projects ORDER BY id DESC');
+    const result = await query('SELECT * FROM projects ORDER BY created_at ASC');
     return res.json(result.rows);
   } catch (error) {
     return res.status(500).json({ error: 'Ошибка получения проектов' });

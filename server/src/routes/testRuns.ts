@@ -22,8 +22,8 @@ router.get('/', async (req: Request, res: Response) => {
       LEFT JOIN users u ON tr.started_by = u.id
       LEFT JOIN test_results tr2 ON tr.id = tr2.test_run_id
       WHERE tr.is_deleted = FALSE
-      GROUP BY tr.id, tp.name, p.name, u.username
-      ORDER BY tr.created_at DESC
+             GROUP BY tr.id, tp.name, p.name, u.username
+       ORDER BY tr.created_at ASC
     `);
     return res.json(result.rows);
   } catch (error) {
@@ -48,8 +48,8 @@ router.get('/test-plan/:testPlanId', async (req: Request, res: Response) => {
       LEFT JOIN users u ON tr.started_by = u.id
       LEFT JOIN test_results tr2 ON tr.id = tr2.test_run_id
       WHERE tr.test_plan_id = $1 AND tr.is_deleted = FALSE
-      GROUP BY tr.id, u.username
-      ORDER BY tr.created_at DESC
+             GROUP BY tr.id, u.username
+       ORDER BY tr.created_at ASC
     `, [testPlanId]);
     return res.json(result.rows);
   } catch (error) {
@@ -230,8 +230,8 @@ router.get('/:id/results', async (req: Request, res: Response) => {
       FROM test_results tr
       LEFT JOIN test_cases tc ON tr.test_case_id = tc.id
       LEFT JOIN users u ON tr.executed_by = u.id
-      WHERE tr.test_run_id = $1
-      ORDER BY tc.id
+             WHERE tr.test_run_id = $1
+       ORDER BY tc.created_at ASC
     `, [id]);
     
     console.log(`[API] Найдено ${result.rows.length} результатов для прогона ${id}`);
@@ -267,8 +267,8 @@ router.get('/:id/test-cases', async (req: Request, res: Response) => {
       FROM test_cases tc
       INNER JOIN test_plan_cases tpc ON tc.id = tpc.test_case_id
       LEFT JOIN users u ON tc.assigned_to = u.id
-      WHERE tpc.test_plan_id = $1 AND tc.is_deleted = FALSE
-      ORDER BY tc.id DESC
+             WHERE tpc.test_plan_id = $1 AND tc.is_deleted = FALSE
+       ORDER BY tc.created_at ASC
     `, [testPlanId]);
     
     console.log(`[API] Найдено ${result.rows.length} тест-кейсов для прогона ${id} (план: ${testPlanId})`);

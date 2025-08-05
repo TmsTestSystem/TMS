@@ -5,7 +5,7 @@ const router = express.Router();
 // Получить все тест-кейсы
 router.get('/', async (req: Request, res: Response) => {
   try {
-    const result = await query('SELECT * FROM test_cases WHERE is_deleted = FALSE ORDER BY id DESC');
+    const result = await query('SELECT * FROM test_cases WHERE is_deleted = FALSE ORDER BY created_at ASC');
     return res.json(result.rows);
   } catch (error) {
     return res.status(500).json({ error: 'Ошибка получения тест-кейсов' });
@@ -17,7 +17,7 @@ router.get('/section/:sectionId', async (req: Request, res: Response) => {
   try {
     const { sectionId } = req.params;
     const result = await query(
-      'SELECT * FROM test_cases WHERE section_id = $1 AND is_deleted = FALSE ORDER BY id DESC',
+      'SELECT * FROM test_cases WHERE section_id = $1 AND is_deleted = FALSE ORDER BY created_at ASC',
       [sectionId]
     );
     return res.json(result.rows);
@@ -41,7 +41,7 @@ router.get('/section/:sectionId', async (req: Request, res: Response) => {
         queryParams.push(excludePlanId);
       }
       
-      queryText += ' ORDER BY id DESC';
+      queryText += ' ORDER BY created_at ASC';
       
       const result = await query(queryText, queryParams);
       console.log(`[API] Найдено ${result.rows.length} тест-кейсов для проекта ${projectId}`);

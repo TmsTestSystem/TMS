@@ -8,7 +8,7 @@ router.get('/project/:projectId', async (req: Request, res: Response) => {
   try {
     const { projectId } = req.params;
     const result = await query(
-      'SELECT * FROM test_case_sections WHERE project_id = $1 ORDER BY order_index, id',
+      'SELECT * FROM test_case_sections WHERE project_id = $1 ORDER BY created_at ASC',
       [projectId]
     );
     return res.json(result.rows);

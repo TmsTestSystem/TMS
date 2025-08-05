@@ -13,13 +13,16 @@ RUN apk add --no-cache \
 
 # Копирование package.json и установка зависимостей
 COPY package*.json ./
-RUN npm ci --only=production
+RUN npm ci
 
 # Копирование исходного кода
 COPY . .
 
 # Компиляция TypeScript
 RUN npm run build
+
+# Удаление devDependencies для уменьшения размера образа
+RUN npm prune --production
 
 # Создание пользователя для безопасности
 RUN addgroup -g 1001 -S nodejs

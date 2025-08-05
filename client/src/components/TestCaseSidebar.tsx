@@ -24,6 +24,8 @@ interface TestCaseSidebarProps {
   onEdit: () => void;
 }
 
+
+
 const TestCaseSidebar: React.FC<TestCaseSidebarProps> = ({ isOpen, onClose, testCase, onEdit }) => {
   const [currentTestCase, setCurrentTestCase] = useState<TestCase | null>(null);
   const [width, setWidth] = useState(400);
@@ -195,22 +197,18 @@ const TestCaseSidebar: React.FC<TestCaseSidebarProps> = ({ isOpen, onClose, test
           </div>
         )}
 
-        {/* Steps */}
-        {currentTestCase.steps && (
-          <div className="bg-white border rounded-lg p-4 mb-6 shadow-sm">
-            <div className="flex items-center gap-2 mb-3">
-              <DocumentTextIcon className="w-5 h-5 text-purple-500" />
-              <h3 className="text-lg font-semibold text-gray-800">Шаги выполнения</h3>
-            </div>
-            <ol className="list-decimal list-inside text-gray-700 text-sm space-y-1">
-              {currentTestCase.steps && currentTestCase.steps.length > 300
-                ? <li className="break-words whitespace-pre-line max-w-full overflow-x-auto">{currentTestCase.steps.slice(0, 300) + '…'}</li>
-                : currentTestCase.steps?.split(/\n|\r|\d+\./).filter(s => s.trim()).map((step, idx) => (
-                  <li key={idx} className="break-words whitespace-pre-line max-w-full" style={{overflowX: /\S{30,}/.test(step) ? 'auto' : 'visible'}}>{step.trim()}</li>
-                ))}
-            </ol>
-          </div>
-        )}
+                 {/* Steps */}
+         {currentTestCase.steps && (
+           <div className="bg-white border rounded-lg p-4 mb-6 shadow-sm">
+             <div className="flex items-center gap-2 mb-3">
+               <DocumentTextIcon className="w-5 h-5 text-purple-500" />
+               <h3 className="text-lg font-semibold text-gray-800">Шаги выполнения</h3>
+             </div>
+             <div className="text-gray-700 break-words whitespace-pre-line leading-relaxed">
+               {currentTestCase.steps}
+             </div>
+           </div>
+         )}
 
         {/* Expected Result */}
         {(currentTestCase.expectedResult || currentTestCase.expected_result) && (
@@ -321,20 +319,18 @@ export const TestCaseSidebarView: React.FC<{
         </div>
       </div>
     )}
-    {/* Steps */}
-    {testCase.steps && (
-      <div className="bg-white rounded-lg p-4 mx-6 mb-4 shadow">
-        <div className="flex items-center gap-2 mb-2">
-          <DocumentTextIcon className="w-5 h-5 text-purple-500" />
-          <h3 className="text-base font-semibold text-gray-800">Шаги выполнения</h3>
-        </div>
-        <ol className="list-decimal list-inside text-gray-700 text-sm space-y-1">
-          {testCase.steps.split(/\n|\r|\d+\./).filter(s => s.trim()).map((step, idx) => (
-            <li key={idx}>{step.trim()}</li>
-          ))}
-        </ol>
-      </div>
-    )}
+         {/* Steps */}
+     {testCase.steps && (
+       <div className="bg-white rounded-lg p-4 mx-6 mb-4 shadow">
+         <div className="flex items-center gap-2 mb-2">
+           <DocumentTextIcon className="w-5 h-5 text-purple-500" />
+           <h3 className="text-base font-semibold text-gray-800">Шаги выполнения</h3>
+         </div>
+         <div className="text-gray-700 break-words whitespace-pre-line leading-relaxed text-sm">
+           {testCase.steps}
+         </div>
+       </div>
+     )}
     {/* Expected Result */}
     {testCase.expectedResult && (
       <div className="bg-white rounded-lg p-4 mx-6 mb-4 shadow">

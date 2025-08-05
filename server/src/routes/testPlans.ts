@@ -14,7 +14,7 @@ router.get('/', async (req: Request, res: Response) => {
       LEFT JOIN projects p ON tp.project_id = p.id
       LEFT JOIN users u ON tp.created_by = u.id
       WHERE tp.is_deleted = FALSE
-      ORDER BY tp.created_at DESC
+      ORDER BY tp.created_at ASC
     `);
     return res.json(result.rows);
   } catch (error) {
@@ -36,7 +36,7 @@ router.get('/project/:projectId', async (req: Request, res: Response) => {
       LEFT JOIN test_cases tc ON tp.id = tc.test_plan_id AND tc.is_deleted = FALSE
       WHERE tp.project_id = $1 AND tp.is_deleted = FALSE
       GROUP BY tp.id, u.username
-      ORDER BY tp.created_at DESC
+      ORDER BY tp.created_at ASC
     `, [projectId]);
     return res.json(result.rows);
   } catch (error) {
@@ -179,7 +179,7 @@ router.post('/:id/restore', async (req: Request, res: Response) => {
         INNER JOIN test_plan_cases tpc ON tc.id = tpc.test_case_id
         LEFT JOIN users u ON tc.assigned_to = u.id
         WHERE tpc.test_plan_id = $1 AND tc.is_deleted = FALSE
-        ORDER BY tc.id DESC
+        ORDER BY tc.created_at ASC
       `, [id]);
 
       console.log(`[API] Найдено ${result.rows.length} тест-кейсов для плана ${id}`);
