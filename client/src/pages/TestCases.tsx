@@ -45,6 +45,8 @@ const TestCases: React.FC = () => {
   const [showEditModal, setShowEditModal] = useState(false);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [gitLoading, setGitLoading] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchMode, setSearchMode] = useState<'title' | 'full'>('full'); // 'title' - только названия, 'full' - все поля
 
   useEffect(() => {
     if (id) {
@@ -281,6 +283,62 @@ const TestCases: React.FC = () => {
               <p className="text-sm text-gray-600">{project.name}</p>
             </div>
           </div>
+          
+          {/* Поле поиска */}
+          <div className="mt-4">
+            <div className="flex items-center gap-2">
+              <div className="relative flex-1">
+                <input
+                  type="text"
+                  placeholder={searchMode === 'title' ? 'Поиск по названиям...' : 'Поиск по тест-кейсам...'}
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full px-4 py-2 pl-10 pr-20 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+                <svg
+                  className="absolute left-3 top-2.5 h-5 w-5 text-gray-400"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                  />
+                </svg>
+                {/* Переключатель режима поиска */}
+                <button
+                  onClick={() => setSearchMode(searchMode === 'title' ? 'full' : 'title')}
+                  className="absolute right-2 top-1.5 px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200 rounded text-gray-700 transition-colors z-10"
+                  title={searchMode === 'title' ? 'Переключить на поиск по всем полям' : 'Переключить на поиск только по названиям'}
+                >
+                  {searchMode === 'title' ? '📝 Названия' : '🔍 Все поля'}
+                </button>
+              </div>
+              {/* Кнопка очистки - справа от поля */}
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="flex-shrink-0 p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors"
+                  title="Очистить поиск"
+                >
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              )}
+            </div>
+            {searchQuery && (
+              <div className="mt-1 text-xs text-gray-500">
+                {searchMode === 'title' 
+                  ? 'Поиск только по названиям тест-кейсов' 
+                  : 'Поиск по всем полям тест-кейсов'}
+              </div>
+            )}
+          </div>
+          
           {/* Кнопки git-синхронизации */}
           <div className="flex gap-2 mt-4">
             <button
@@ -311,6 +369,8 @@ const TestCases: React.FC = () => {
             selectedTestCaseId={selectedTestCase?.id}
             refreshTrigger={refreshTrigger}
             groupBySection={true}
+            searchQuery={searchQuery}
+            searchMode={searchMode}
           />
         </div>
       </div>

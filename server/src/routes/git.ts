@@ -3,8 +3,21 @@ import { simpleGit, SimpleGit } from 'simple-git';
 import path from 'path';
 import fs from 'fs';
 import { query } from '../config/database';
+import { logger } from '../utils/logger';
 
 const router = express.Router();
+
+// Функция для выполнения операций с таймаутом
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, operation: string): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) => {
+      setTimeout(() => {
+        reject(new Error(`Timeout: операция ${operation} превысила лимит времени ${timeoutMs}ms`));
+      }, timeoutMs);
+    })
+  ]);
+}
 
 // Получить статус Git репозитория
 router.get('/status', async (req: Request, res: Response) => {
@@ -300,9 +313,18 @@ async function getProjectRepoInfo(projectId: string) {
 // Подставляет токен в ссылку на репозиторий, если это github и есть токен
 function withGitToken(url: string): string {
   const token = process.env.GIT_TOKEN;
-  if (token && url && url.startsWith('https://github.com/')) {
+  // Проверяем, что токен установлен и не является placeholder
+  const isPlaceholder = !token || 
+    token === 'your-github-personal-access-token' || 
+    token.includes('your-') || 
+    token.length < 10;
+  
+  if (!isPlaceholder && url && url.startsWith('https://github.com/')) {
     return url.replace('https://github.com/', `https://${token}@github.com/`);
   }
+  
+  // Если токен не установлен или является placeholder, возвращаем URL без токена
+  // Git может использовать другие методы аутентификации (SSH ключи, credential helper)
   return url;
 }
 
@@ -778,41 +800,65 @@ router.post('/import-json', async (req, res) => {
 
 // /pull и /push теперь вызывают напрямую эти функции
 router.post('/pull', async (req, res) => {
+  logger.info('Git pull request received', { query: req.query });
   try {
     const projectId = req.query.projectId as string;
     if (!projectId) {
+      logger.warn('Git pull: projectId not provided');
       res.status(400).json({ success: false, error: 'projectId обязателен' });
       return;
     }
+    logger.info('Processing pull for projectId', { projectId });
     let { repoPath, gitRepoUrl } = await getProjectRepoInfo(projectId);
     gitRepoUrl = withGitToken(gitRepoUrl);
+    logger.info('Git repository info', { repoPath, hasGitRepoUrl: !!gitRepoUrl });
     let git: SimpleGit;
     if (!fs.existsSync(path.join(repoPath, '.git'))) {
       if (!gitRepoUrl) {
+        logger.error('Git pull: git_repo_url not set', { projectId });
         res.status(400).json({ success: false, error: 'git_repo_url не задан' });
         return;
       }
       // Если папка существует, но нет .git, инициализируем git и подтягиваем remote
       if (fs.existsSync(repoPath)) {
+        logger.info('Initializing git repository for pull', { repoPath });
         const gitInit = simpleGit(repoPath);
         await gitInit.init();
-        await gitInit.addRemote('origin', gitRepoUrl).catch(() => {});
+        await gitInit.addRemote('origin', gitRepoUrl).catch((err) => {
+          logger.warn('Failed to add remote (may already exist)', { error: err.message });
+        });
         try {
+          logger.info('Fetching and checking out main branch');
           await gitInit.fetch('origin', 'main');
           await gitInit.checkout(['-B', 'main', 'origin/main']);
+          logger.info('Successfully fetched and checked out main branch');
         } catch (e) {
-          await gitInit.checkoutLocalBranch('main').catch(() => {});
+          const err = e as Error;
+          logger.warn('Failed to fetch/checkout, creating local branch', { error: err.message });
+          await gitInit.checkoutLocalBranch('main').catch((err) => {
+            logger.error('Failed to create local branch', { error: err.message });
+          });
         }
       } else {
+        logger.info('Cloning repository for pull', { gitRepoUrl, repoPath });
         await simpleGit().clone(gitRepoUrl, repoPath);
+        logger.info('Repository cloned successfully');
       }
     }
     git = simpleGit(repoPath);
+    logger.info('Pulling from remote repository');
     await git.pull();
+    logger.info('Pull completed, importing project data', { projectId, repoPath });
     await importJsonProject(query, projectId, repoPath);
+    logger.info('Git pull completed successfully', { projectId });
     res.json({ success: true, message: 'Данные успешно импортированы из Git' });
   } catch (error) {
     const err = error as Error;
+    logger.error('Error during git pull', { 
+      error: err.message,
+      stack: err.stack,
+      projectId: req.query.projectId 
+    });
     let errorMessage = 'Ошибка импорта из Git';
     if (err.message.includes('ENOTFOUND')) {
       errorMessage = 'Не удается подключиться к репозиторию. Проверьте URL.';
@@ -826,79 +872,329 @@ router.post('/pull', async (req, res) => {
 });
 
 router.post('/push', async (req, res) => {
-  console.log('Git push request received:', req.query);
+  logger.info('Git push request received', { query: req.query });
   try {
     const projectId = req.query.projectId as string;
     if (!projectId) {
-      console.log('No projectId provided');
+      logger.warn('Git push: projectId not provided');
       res.status(400).json({ success: false, error: 'projectId обязателен' });
       return;
     }
-    console.log('Processing push for projectId:', projectId);
+    logger.info('Processing push for projectId', { projectId });
     let { repoPath, gitRepoUrl } = await getProjectRepoInfo(projectId);
+    const originalUrl = gitRepoUrl;
+    const token = process.env.GIT_TOKEN;
+    const isPlaceholder = !token || 
+      token === 'your-github-personal-access-token' || 
+      token.includes('your-') || 
+      token.length < 10;
+    
+    if (isPlaceholder && originalUrl && originalUrl.startsWith('https://github.com/')) {
+      logger.warn('Git token not configured or is placeholder. Push may fail if repository requires authentication.', {
+        hasToken: !!token,
+        tokenLength: token?.length || 0
+      });
+    }
+    
     gitRepoUrl = withGitToken(gitRepoUrl);
+    logger.info('Exporting project data', { projectId, repoPath });
     await exportJsonProject(query, projectId, repoPath);
     let git: SimpleGit;
     if (!fs.existsSync(path.join(repoPath, '.git'))) {
       if (!gitRepoUrl) {
+        logger.error('Git push: git_repo_url not set', { projectId });
         res.status(400).json({ success: false, error: 'git_repo_url не задан' });
         return;
       }
       if (fs.existsSync(repoPath)) {
+        logger.info('Initializing git repository', { repoPath });
         const gitInit = simpleGit(repoPath);
         await gitInit.init();
-        await gitInit.addRemote('origin', gitRepoUrl).catch(() => {});
+        await gitInit.addRemote('origin', gitRepoUrl).catch((err) => {
+          logger.warn('Failed to add remote (may already exist)', { error: err.message });
+        });
         try {
           await gitInit.fetch('origin', 'main');
           await gitInit.checkout(['-B', 'main', 'origin/main']);
+          logger.info('Fetched and checked out main branch');
         } catch (e) {
-          await gitInit.checkoutLocalBranch('main').catch(() => {});
+          const err = e as Error;
+          logger.warn('Failed to fetch/checkout, creating local branch', { error: err.message });
+          await gitInit.checkoutLocalBranch('main').catch((err) => {
+            logger.error('Failed to create local branch', { error: err.message });
+          });
         }
       } else {
+        logger.info('Cloning repository', { gitRepoUrl, repoPath });
         await simpleGit().clone(gitRepoUrl, repoPath);
       }
     }
     git = simpleGit(repoPath);
     await git.addConfig('user.email', 'tms@example.com');
     await git.addConfig('user.name', 'TMS User');
+    logger.info('Staging files for commit');
     await git.add('./*/*');
+    logger.info('Creating commit');
     await git.commit('feat: экспорт данных из БД в JSON');
     try {
       // Перед push делаем pull --rebase для интеграции изменений других пользователей
-      await git.pull('origin', 'main', {'--rebase': null});
+      logger.info('Pulling with rebase before push');
+      await withTimeout(
+        git.pull('origin', 'main', {'--rebase': null}),
+        180000, // 3 минуты таймаут для pull --rebase
+        'pull --rebase'
+      );
+      logger.info('Pull with rebase completed successfully');
     } catch (pullErr) {
       const err = pullErr as Error;
-      // Ограничиваем сообщение об ошибке
-      let errorMessage = 'Конфликт при синхронизации с удаленным репозиторием';
-      if (err.message.includes('CONFLICT')) {
-        errorMessage = 'Обнаружены конфликты в файлах. Очистите локальный репозиторий и попробуйте снова.';
-      } else if (err.message.includes('could not apply')) {
-        errorMessage = 'Ошибка применения изменений. Попробуйте очистить репозиторий.';
+      logger.error('Error during pull with rebase', { 
+        error: err.message, 
+        stack: err.stack,
+        projectId,
+        repoPath 
+      });
+      
+      // Если есть конфликты, пытаемся их автоматически разрешить
+      if (err.message.includes('CONFLICT') || err.message.includes('conflict')) {
+        logger.warn('Conflicts detected, attempting automatic resolution');
+        try {
+          // Проверяем статус для обнаружения конфликтующих файлов
+          const status = await git.status();
+          logger.info('Git status', { 
+            conflicted: status.conflicted,
+            conflictedCount: status.conflicted.length,
+            modified: status.modified,
+            created: status.created
+          });
+          
+          if (status.conflicted.length > 0) {
+            logger.info('Resolving conflicts using theirs strategy (our local changes)', { 
+              conflictedFiles: status.conflicted 
+            });
+            // При rebase используем --theirs, потому что это наши локальные изменения из БД
+            // В rebase: ours = удаленная ветка, theirs = наши локальные изменения
+            for (const file of status.conflicted) {
+              try {
+                logger.debug('Resolving conflict for file', { file });
+                // При rebase используем theirs (наши изменения)
+                await git.checkout(['--theirs', file]);
+                await git.add(file);
+                logger.debug('Conflict resolved for file', { file });
+              } catch (checkoutErr) {
+                const checkoutError = checkoutErr as Error;
+                logger.error('Error resolving conflict for file', { 
+                  file, 
+                  error: checkoutError.message,
+                  stack: checkoutError.stack 
+                });
+                // Если не удалось через checkout, пробуем просто добавить файл (берем текущую версию)
+                try {
+                  await git.add(file);
+                  logger.info('Added file after checkout error', { file });
+                } catch (addErr) {
+                  logger.error('Failed to add file after checkout error', { 
+                    file, 
+                    error: (addErr as Error).message 
+                  });
+                }
+              }
+            }
+            // Продолжаем rebase с таймаутом
+            logger.info('Continuing rebase after conflict resolution', { 
+              conflictedCount: status.conflicted.length 
+            });
+            
+            // Если конфликтов много (больше 20), сразу переключаемся на merge стратегию
+            if (status.conflicted.length > 20) {
+              logger.warn('Too many conflicts, switching to merge strategy instead of rebase', { 
+                conflictedCount: status.conflicted.length 
+              });
+              throw new Error('TIMEOUT_REBASE');
+            }
+            
+            try {
+              await withTimeout(
+                git.rebase(['--continue']),
+                300000, // 5 минут таймаут для rebase --continue (увеличено для больших репозиториев)
+                'rebase --continue'
+              );
+              logger.info('Conflicts successfully resolved and rebase completed');
+            } catch (continueErr) {
+              const continueError = continueErr as Error;
+              logger.error('Error continuing rebase after conflict resolution', { 
+                error: continueError.message,
+                stack: continueError.stack,
+                isTimeout: continueError.message.includes('Timeout')
+              });
+              // Если таймаут, пробуем abort и переключиться на merge стратегию
+              if (continueError.message.includes('Timeout')) {
+                throw new Error('TIMEOUT_REBASE');
+              }
+              throw continueError;
+            }
+          } else {
+            logger.warn('Conflicts mentioned but no conflicted files in status, trying alternative approach');
+            // Если конфликты не в статусе, пробуем abort и повторить с merge стратегией
+            await git.rebase(['--abort']).catch((abortErr) => {
+              logger.warn('Failed to abort rebase', { error: (abortErr as Error).message });
+            });
+            // Делаем обычный pull с merge стратегией ours
+            logger.info('Trying pull with ours merge strategy');
+            await withTimeout(
+              git.pull('origin', 'main', {'-X': 'ours'}),
+              180000, // 3 минуты таймаут
+              'pull with ours strategy'
+            );
+            logger.info('Pull with ours strategy completed');
+          }
+        } catch (resolveErr) {
+          const resolveError = resolveErr as Error;
+          logger.error('Error during automatic conflict resolution', { 
+            error: resolveError.message,
+            stack: resolveError.stack,
+            projectId,
+            repoPath,
+            isTimeout: resolveError.message.includes('Timeout') || resolveError.message.includes('TIMEOUT')
+          });
+          
+          // Если таймаут или другая ошибка при rebase, пробуем обычный merge с стратегией ours
+          try {
+            logger.info('Rebase failed, trying abort and switching to merge strategy');
+            await git.rebase(['--abort']).catch((abortErr) => {
+              logger.warn('Failed to abort rebase, continuing anyway', { error: (abortErr as Error).message });
+            });
+            
+            // Отменяем последний коммит, чтобы можно было сделать merge
+            logger.info('Resetting to before our commit to prepare for merge');
+            await git.reset(['--soft', 'HEAD~1']).catch((resetErr) => {
+              logger.warn('Failed to reset soft, trying hard reset', { error: (resetErr as Error).message });
+              // Если soft reset не сработал, пробуем hard reset на origin/main
+              return git.reset(['--hard', 'origin/main']).catch(() => {
+                logger.warn('Failed to reset hard as well');
+              });
+            });
+            
+            // Повторно экспортируем данные
+            logger.info('Re-exporting project data for merge');
+            await exportJsonProject(query, projectId, repoPath);
+            
+            // Делаем обычный pull с merge стратегией ours (наши изменения приоритетны)
+            logger.info('Trying pull with merge strategy (ours)');
+            await git.add('./*/*');
+            await git.commit('feat: экспорт данных из БД в JSON');
+            await withTimeout(
+              git.pull('origin', 'main', {'-X': 'ours', '--no-rebase': null}),
+              180000, // 3 минуты таймаут для merge
+              'pull with merge strategy'
+            );
+            logger.info('Merge with ours strategy completed successfully');
+          } catch (mergeErr) {
+            const mergeError = mergeErr as Error;
+            logger.error('Error during merge fallback', { 
+              error: mergeError.message,
+              stack: mergeError.stack,
+              projectId,
+              repoPath 
+            });
+            res.status(409).json({ 
+              success: false, 
+              error: 'Не удалось автоматически разрешить конфликты. Попробуйте выполнить Pull, затем Push снова.' 
+            });
+            return;
+          }
+        }
+      } else {
+        // Другие ошибки при pull
+        logger.error('Non-conflict error during pull', { 
+          error: err.message,
+          stack: err.stack,
+          projectId 
+        });
+        let errorMessage = 'Ошибка синхронизации с удаленным репозиторием';
+        if (err.message.includes('could not apply')) {
+          errorMessage = 'Ошибка применения изменений. Попробуйте выполнить Pull, затем Push снова.';
+        }
+        res.status(409).json({ success: false, error: errorMessage });
+        return;
       }
-      res.status(409).json({ success: false, error: errorMessage });
-      return;
     }
+    // Обновляем remote URL с токеном перед push
+    if (originalUrl && originalUrl.startsWith('https://github.com/')) {
+      const urlWithToken = withGitToken(originalUrl);
+      if (urlWithToken !== originalUrl) {
+        logger.info('Updating remote URL with token', { 
+          originalUrl: originalUrl.substring(0, 30) + '...',
+          hasToken: urlWithToken.includes('@')
+        });
+        try {
+          await git.removeRemote('origin');
+        } catch (removeErr) {
+          logger.debug('Remote origin does not exist or already removed');
+        }
+        await git.addRemote('origin', urlWithToken);
+        logger.info('Remote URL updated successfully');
+      } else {
+        logger.warn('Token not applied to URL, push may fail', { 
+          tokenLength: process.env.GIT_TOKEN?.length || 0 
+        });
+      }
+    }
+    
     try {
-      await git.push();
+      logger.info('Pushing to remote repository');
+      await withTimeout(
+        git.push(),
+        120000, // 2 минуты таймаут для push
+        'push'
+      );
+      logger.info('Push completed successfully');
     } catch (e) {
+      const pushErr = e as Error;
+      logger.warn('Error during push, trying with set-upstream', { 
+        error: pushErr.message,
+        stack: pushErr.stack 
+      });
       // Если ошибка про upstream, пробуем с --set-upstream
       try {
-        await git.push(['--set-upstream', 'origin', 'main']);
-      } catch (pushErr) {
-        const err = pushErr as Error;
-        let errorMessage = 'Ошибка отправки изменений в репозиторий';
-        if (err.message.includes('authentication')) {
-          errorMessage = 'Ошибка аутентификации. Проверьте Git токен.';
-        } else if (err.message.includes('permission')) {
-          errorMessage = 'Нет прав для записи в репозиторий.';
-        }
+        await withTimeout(
+          git.push(['--set-upstream', 'origin', 'main']),
+          120000, // 2 минуты таймаут для push с upstream
+          'push --set-upstream'
+        );
+        logger.info('Push with set-upstream completed successfully');
+      } catch (pushErr2) {
+        const err = pushErr2 as Error;
+        logger.error('Error during push with set-upstream', { 
+          error: err.message,
+          stack: err.stack,
+          projectId 
+        });
+            let errorMessage = 'Ошибка отправки изменений в репозиторий';
+            if (err.message.includes('Timeout') || err.message.includes('timeout')) {
+              errorMessage = 'Операция превысила лимит времени. Попробуйте выполнить Push снова. Если проблема повторяется, возможно, репозиторий слишком большой или есть проблемы с сетью.';
+            } else if (err.message.includes('authentication') || 
+                err.message.includes('could not read Password') || 
+                err.message.includes('No such device or address') ||
+                err.message.includes('your-github-personal-access-token')) {
+              errorMessage = 'Ошибка аутентификации. Проверьте, что GIT_TOKEN установлен в .env файле и содержит действительный GitHub Personal Access Token (не placeholder).';
+            } else if (err.message.includes('permission') || err.message.includes('denied')) {
+              errorMessage = 'Нет прав для записи в репозиторий. Проверьте права доступа токена.';
+            } else if (err.message.includes('not found') || err.message.includes('404')) {
+              errorMessage = 'Репозиторий не найден. Проверьте URL репозитория.';
+            }
         res.status(500).json({ success: false, error: errorMessage });
         return;
       }
     }
+    logger.info('Git push completed successfully', { projectId });
     res.json({ success: true, message: 'Данные успешно экспортированы в Git' });
   } catch (error) {
     const err = error as Error;
+    logger.error('Fatal error during git push', { 
+      error: err.message,
+      stack: err.stack,
+      projectId: req.query.projectId 
+    });
     let errorMessage = 'Ошибка экспорта в Git';
     if (err.message.includes('ENOTFOUND')) {
       errorMessage = 'Не удается подключиться к репозиторию. Проверьте URL.';

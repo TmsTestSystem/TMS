@@ -36,6 +36,8 @@ interface TestCaseTreeProps {
   onTestCaseEdit: (testCase: TestCase) => void;
   selectedTestCaseId?: string;
   refreshTrigger?: number;
+  searchQuery?: string;
+  searchMode?: 'title' | 'full'; // 'title' - только названия, 'full' - все поля
 }
 
 const TestCaseTree: React.FC<TestCaseTreeProps> = ({
@@ -44,7 +46,9 @@ const TestCaseTree: React.FC<TestCaseTreeProps> = ({
   onTestCaseCreate,
   onTestCaseEdit,
   selectedTestCaseId,
-  refreshTrigger
+  refreshTrigger,
+  searchQuery = '',
+  searchMode = 'full'
 }) => {
   const [sections, setSections] = useState<TestCaseSection[]>([]);
   const [testCases, setTestCases] = useState<TestCase[]>([]);
@@ -102,6 +106,30 @@ const TestCaseTree: React.FC<TestCaseTreeProps> = ({
   useEffect(() => {
     loadData();
   }, [projectId, refreshTrigger]);
+
+  // Автоматическое раскрытие разделов при поиске
+  useEffect(() => {
+    if (searchQuery.trim()) {
+      const sectionsToExpand = new Set<string>();
+      sections.forEach(section => {
+        if (hasMatchingTestCases(section.id)) {
+          sectionsToExpand.add(section.id);
+          // Также раскрываем родительские разделы
+          let currentSection = section;
+          while (currentSection.parent_id) {
+            const parent = sections.find(s => s.id === currentSection.parent_id);
+            if (parent) {
+              sectionsToExpand.add(parent.id);
+              currentSection = parent;
+            } else {
+              break;
+            }
+          }
+        }
+      });
+      setExpandedSections(sectionsToExpand);
+    }
+  }, [searchQuery, testCases, sections]);
 
   const loadData = async () => {
     try {
@@ -266,9 +294,45 @@ const TestCaseTree: React.FC<TestCaseTreeProps> = ({
     return sections.filter(s => s.parent_id === parentId);
   };
 
-  // Получение тест-кейсов раздела
+  // Функция фильтрации тест-кейсов по поисковому запросу
+  const matchesSearch = (testCase: TestCase): boolean => {
+    if (!searchQuery.trim()) return true;
+    
+    const query = searchQuery.toLowerCase().trim();
+    
+    // Если режим поиска - только названия
+    if (searchMode === 'title') {
+      return testCase.title?.toLowerCase().includes(query) || false;
+    }
+    
+    // Если режим поиска - все поля
+    const searchFields = [
+      testCase.title,
+      testCase.description,
+      testCase.preconditions,
+      testCase.steps,
+      testCase.expected_result,
+      testCase.priority,
+      testCase.status
+    ].filter(Boolean).map(field => field?.toLowerCase() || '');
+    
+    return searchFields.some(field => field.includes(query));
+  };
+
+  // Получение тест-кейсов раздела с учетом поиска
   const getSectionTestCases = (sectionId: string | null) => {
-    return testCases.filter(tc => tc.section_id === sectionId);
+    const sectionCases = testCases.filter(tc => tc.section_id === sectionId);
+    if (!searchQuery.trim()) return sectionCases;
+    return sectionCases.filter(matchesSearch);
+  };
+
+  // Проверка, есть ли в разделе или его дочерних разделах тест-кейсы, соответствующие поиску
+  const hasMatchingTestCases = (sectionId: string): boolean => {
+    const directCases = getSectionTestCases(sectionId);
+    if (directCases.length > 0) return true;
+    
+    const childSections = sections.filter(s => s.parent_id === sectionId);
+    return childSections.some(child => hasMatchingTestCases(child.id));
   };
 
   // Перемещение тест-кейса в раздел
@@ -401,6 +465,11 @@ const TestCaseTree: React.FC<TestCaseTreeProps> = ({
     const sectionTestCases = getSectionTestCases(section.id);
     const isEditing = editingSection === section.id;
     const isDragOver = dragOverSection === section.id;
+    
+    // Если есть поисковый запрос, скрываем разделы без подходящих тест-кейсов
+    if (searchQuery.trim() && !hasMatchingTestCases(section.id)) {
+      return null;
+    }
 
     return (
       <div key={section.id} className="select-none">
